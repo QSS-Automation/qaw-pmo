@@ -6,7 +6,7 @@ Handles plan_* and actual_* tables for the Projects section.
 
 Uses the same SSH tunnel settings as the CRM connection.
 Add to .env:
-    PMO_MYSQL_HOST=10.1.10.26
+    PMO_MYSQL_HOST=your_mysql_host_or_ip
     PMO_MYSQL_PORT=3306
     PMO_MYSQL_USER=your_username
     PMO_MYSQL_PASSWORD=your_password
