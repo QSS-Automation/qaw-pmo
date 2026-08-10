@@ -348,14 +348,6 @@ def get_submitted_months(
     return [{'year': r['year'], 'month': r['month']} for r in rows]
 
 
-# ── POST /convert (called on deal conversion) ─────────────────────────────────
-
-@pmo_router.post('/convert')
-def push_on_convert(body: dict):
-    """Initial push to plan tables on deal conversion. Called internally."""
-    raise HTTPException(status_code=405, detail='Use the convert deal endpoint instead')
-
-
 # ── POST /plan/submit ─────────────────────────────────────────────────────────
 
 @pmo_router.post('/{project_code}/plan/submit')
@@ -470,6 +462,110 @@ def submit_plan(
 
 # ── POST /actual/push ─────────────────────────────────────────────────────────
 
+def _finalize_actual_draft(
+    db: Session, project_row: Project, current_draft: ActualDraft,
+    proj: Optional['PmoProjectBase'] = None, saved_by_id: Optional[int] = None,
+) -> dict:
+    """
+    The actual "push this draft to the database, officially" logic — shared
+    between the manual Final Submit button (push_actual, below, still gated
+    to the last day of the month) and the automatic month-end catch-up job
+    (see auto_finalize_overdue_drafts in main.py). That job exists
+    specifically because a missed Final Submit used to leave a month
+    permanently stuck as a draft that could never become official — once
+    today's month no longer equals that draft's month, the last-day check
+    can never pass for it again, no matter how long it waits.
+
+    proj: the manual path still passes body.project, since the user may have
+    edited contract value/dates etc. directly in the form before submitting.
+    The scheduler has no request body to read that from, so when proj is
+    omitted, this falls back to whatever's on the local Project record —
+    that's genuinely the only data available for an automatic submission.
+    """
+    resources  = [PmoResource(**r) for r in json.loads(current_draft.resources_json)]
+    misc_costs = [PmoMiscCost(**mc) for mc in json.loads(current_draft.misc_costs_json)]
+    rag_status = current_draft.rag
+    y, m = current_draft.year, current_draft.month
+    project_code = project_row.project_code
+
+    if proj is None:
+        proj = PmoProjectBase(
+            project_name=project_row.name, customer=project_row.customer,
+            entity=project_row.entity, project_type=project_row.project_type,
+            technology=project_row.technology, currency=project_row.currency or 'MYR',
+            contract_value=project_row.contract_value_myr or 0,
+            project_budget=project_row.project_budget or 0,
+            license_cost=project_row.license_cost or 0,
+            account_manager=project_row.account_manager,
+            start_date=project_row.start_date, target_end_date=project_row.original_end_date,
+        )
+
+    pmo_query, pmo_execute, pmo_executemany, safe_date = _pmo()
+    today = _today()
+
+    total_misc = sum(mc.amount or 0 for mc in misc_costs)
+    pmo_execute('''
+        REPLACE INTO actual_project
+        (project_code, project_name, customer, entity, project_type, technology,
+         currency, contract_value, project_budget, license_cost, revenue_deduction,
+         account_manager, start_date, target_end_date, rag_status, submit_date)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ''', (project_code, proj.project_name, proj.customer, proj.entity,
+          proj.project_type, proj.technology, proj.currency, proj.contract_value,
+          proj.project_budget, proj.license_cost, total_misc,
+          proj.account_manager, safe_date(proj.start_date),
+          safe_date(proj.target_end_date), rag_status, today))
+
+    # actual_resource — scope the replace to THIS month only, so other
+    # months' actual cost history is preserved instead of being wiped.
+    pmo_execute('DELETE FROM actual_resource WHERE project_code = %s AND year = %s AND month = %s', (project_code, y, m))
+    if resources:
+        pmo_executemany('''
+            INSERT IGNORE INTO actual_resource
+            (project_code, project_name, staff_name, role, project_cost, distribution, submit_date, year, month)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ''', [(project_code, proj.project_name, r.staff_name, r.role,
+               r.computed_cost(), r.distribution, today, y, m)
+              for r in resources])
+
+    pmo_execute('DELETE FROM actual_misc_cost WHERE project_code = %s', (project_code,))
+    if misc_costs:
+        pmo_executemany('''
+            INSERT IGNORE INTO actual_misc_cost
+            (project_code, project_name, amount, submit_date, cost_name)
+            VALUES (%s,%s,%s,%s,%s)
+        ''', [(project_code, proj.project_name, mc.amount or 0, today,
+               mc.custom_detail if (mc.category == "Others" and mc.custom_detail) else mc.category)
+              for mc in misc_costs])
+
+    # Draft is now superseded by the real submission — close out its current
+    # version (not a hard delete) so the Schedule permission fallback chain
+    # correctly moves on to actual_resource, while every draft save leading
+    # up to this submission stays in the table as history rather than being
+    # erased. No new version follows this one; the trail just ends here.
+    current_draft.is_current = False
+    current_draft.end_date = datetime.utcnow()
+
+    # Carry this month's just-submitted actual forward as next month's
+    # starting plan draft — but only if nothing is already sitting there
+    # for next month, so this never clobbers work already in progress.
+    next_year, next_month = (y + 1, 1) if m == 12 else (y, m + 1)
+    if not _get_current_plan_draft(db, project_row.id, next_year, next_month):
+        seed = PlanDraft(
+            project_id=project_row.id, year=next_year, month=next_month,
+            resources_json=json.dumps([r.model_dump() for r in resources]),
+            misc_costs_json=json.dumps([mc.model_dump() for mc in misc_costs]),
+            saved_by=saved_by_id,
+            version=1, is_current=True,
+        )
+        db.add(seed)
+        db.flush()
+        seed.entity_id = seed.id
+
+    db.commit()
+    return {'project_code': project_code, 'submit_date': today, 'message': 'Actual data pushed successfully'}
+
+
 @pmo_router.post('/{project_code}/actual/push')
 def push_actual(
     project_code: str, body: ActualPushBody, db: Session = Depends(get_db),
@@ -489,13 +585,6 @@ def push_actual(
                    f"You can keep using Save Draft until then."
         )
 
-    # Submit now pushes whatever was last explicitly SAVED as a draft, not
-    # whatever happens to be sitting in the request body from live, possibly
-    # unsaved, form state — the two could differ if someone edited a field
-    # and hit Submit without saving first. body.resources/body.misc_costs/
-    # body.rag_status are intentionally ignored below in favor of the saved
-    # draft; body.project (contract value, dates, etc.) is unrelated to the
-    # draft and still comes from the request as before.
     project_row = db.query(Project).filter(Project.project_code == project_code).first()
     current_draft = _get_current_actual_draft(db, project_row.id, body.year, body.month) if project_row else None
     if not current_draft:
@@ -503,89 +592,71 @@ def push_actual(
             status_code=400,
             detail="No saved draft found for this month — please Save Draft before submitting."
         )
-    resources  = [PmoResource(**r) for r in json.loads(current_draft.resources_json)]
-    misc_costs = [PmoMiscCost(**mc) for mc in json.loads(current_draft.misc_costs_json)]
-    rag_status = current_draft.rag
+
+    # Submit now pushes whatever was last explicitly SAVED as a draft, not
+    # whatever happens to be sitting in the request body from live, possibly
+    # unsaved, form state — the two could differ if someone edited a field
+    # and hit Submit without saving first. body.resources/body.misc_costs/
+    # body.rag_status are intentionally ignored in favor of the saved draft
+    # (see _finalize_actual_draft); body.project (contract value, dates,
+    # etc.) is unrelated to the draft and is still honored as before.
+    resources_preview = [PmoResource(**r) for r in json.loads(current_draft.resources_json)]
 
     # Server-side hard validation — cannot be bypassed by frontend
     # Exclude this project's own existing allocation from the capacity check
-    _validate_resources(resources, db, exclude_project_code=project_code)
+    _validate_resources(resources_preview, db, exclude_project_code=project_code)
 
-    pmo_query, pmo_execute, pmo_executemany, safe_date = _pmo()
-    proj  = body.project
-    today = _today()
-    y, m  = body.year, body.month
-
-    # actual_project — REPLACE (one row per project)
-    # revenue_deduction is computed server-side from misc_costs, not trusted
-    # from the request body — matches the pattern used in convert_deal_to_project.
-    total_misc = sum(mc.amount or 0 for mc in misc_costs)
-    pmo_execute('''
-        REPLACE INTO actual_project
-        (project_code, project_name, customer, entity, project_type, technology,
-         currency, contract_value, project_budget, license_cost, revenue_deduction,
-         account_manager, start_date, target_end_date, rag_status, submit_date)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    ''', (project_code, proj.project_name, proj.customer, proj.entity,
-          proj.project_type, proj.technology, proj.currency, proj.contract_value,
-          proj.project_budget, proj.license_cost, total_misc,
-          proj.account_manager, safe_date(proj.start_date),
-          safe_date(proj.target_end_date), rag_status, today))
-
-    # actual_resource — NOW has year/month; scope the replace to THIS month only,
-    # so other months' actual cost history is preserved instead of being wiped.
-    pmo_execute('DELETE FROM actual_resource WHERE project_code = %s AND year = %s AND month = %s', (project_code, y, m))
-    if resources:
-        pmo_executemany('''
-            INSERT IGNORE INTO actual_resource
-            (project_code, project_name, staff_name, role, project_cost, distribution, submit_date, year, month)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        ''', [(project_code, proj.project_name, r.staff_name, r.role,
-               r.computed_cost(), r.distribution, today, y, m)
-              for r in resources])
+    return _finalize_actual_draft(
+        db, project_row, current_draft,
+        proj=body.project, saved_by_id=current_resource.id if current_resource else None,
+    )
 
 
-    # actual_misc_cost — no year/month, DELETE + re-INSERT (matches confirmed schema)
-    pmo_execute('DELETE FROM actual_misc_cost WHERE project_code = %s', (project_code,))
-    if misc_costs:
-        pmo_executemany('''
-            INSERT IGNORE INTO actual_misc_cost
-            (project_code, project_name, amount, submit_date, cost_name)
-            VALUES (%s,%s,%s,%s,%s)
-        ''', [(project_code, proj.project_name, mc.amount or 0, today,
-               mc.custom_detail if (mc.category == "Others" and mc.custom_detail) else mc.category)
-              for mc in misc_costs])
+def auto_finalize_overdue_drafts(db: Session) -> list:
+    """
+    Finds every CURRENT ActualDraft whose (year, month) has already fully
+    passed relative to today, and finalizes it automatically — the same
+    _finalize_actual_draft logic Final Submit uses, just without a human
+    clicking the button first.
 
-    # Draft is now superseded by the real submission — close out its current
-    # version (not a hard delete) so the Schedule permission fallback chain
-    # correctly moves on to actual_resource, while every draft save leading
-    # up to this submission stays in the table as history rather than being
-    # erased. No new version follows this one; the trail just ends here.
-    if project_row:
-        if current_draft:
-            current_draft.is_current = False
-            current_draft.end_date = datetime.utcnow()
+    Exists because Final Submit is gated to the last day of the month being
+    submitted for; if that single day gets missed for any reason, today's
+    month can never equal that draft's month again, and the manual button's
+    own check can never pass for it afterward. Without this, that draft
+    would sit there forever — visible in the interface, but never promoted
+    to the official actual_resource record, and never seeding the following
+    month's Plan draft either, stalling the whole Plan→Actual→next-Plan
+    cycle for that project.
 
-        # Carry this month's just-submitted actual forward as next month's
-        # starting plan draft — but only if nothing is already sitting there
-        # for next month, so this never clobbers work already in progress.
-        next_year, next_month = (y + 1, 1) if m == 12 else (y, m + 1)
-        if not _get_current_plan_draft(db, project_row.id, next_year, next_month):
-            seed = PlanDraft(
-                project_id=project_row.id, year=next_year, month=next_month,
-                resources_json=json.dumps([r.model_dump() for r in resources]),
-                misc_costs_json=json.dumps([mc.model_dump() for mc in misc_costs]),
-                saved_by=current_resource.id if current_resource else None,
-                version=1, is_current=True,
-            )
-            db.add(seed)
-            db.flush()
-            seed.entity_id = seed.id
+    Called once at startup (catching anything already stuck) and on a daily
+    schedule after that — see main.py. Returns a list of what got finalized,
+    purely for logging; callers aren't required to do anything with it.
+    """
+    from app.db.pmo_mysql import _pmo_configured
+    if not _pmo_configured():
+        return []
 
-        db.commit()
+    today = date.today()
+    finalized = []
 
-    return {'project_code': project_code, 'submit_date': today,
-            'message': 'Actual data pushed successfully'}
+    overdue_drafts = db.query(ActualDraft).filter(ActualDraft.is_current == True).all()
+    for draft in overdue_drafts:
+        if (draft.year, draft.month) >= (today.year, today.month):
+            continue   # current or future month — not overdue, leave it for the normal Final Submit flow
+        project_row = db.query(Project).filter(Project.id == draft.project_id).first()
+        if not project_row or not project_row.project_code:
+            continue
+        try:
+            resources_preview = [PmoResource(**r) for r in json.loads(draft.resources_json)]
+            _validate_resources(resources_preview, db, exclude_project_code=project_row.project_code)
+            _finalize_actual_draft(db, project_row, draft, saved_by_id=draft.saved_by)
+            finalized.append({"project_code": project_row.project_code, "year": draft.year, "month": draft.month})
+            print(f"[auto-finalize] Finalized overdue Actual for {project_row.project_code} ({draft.year}-{draft.month:02d})")
+        except Exception as e:
+            db.rollback()
+            print(f"[auto-finalize] Failed to finalize {project_row.project_code} ({draft.year}-{draft.month:02d}), left as a draft for manual review: {e}")
+
+    return finalized
 
 
 # ── GET/PUT actual draft (server-side — used for pre-fill AND Schedule access) ─

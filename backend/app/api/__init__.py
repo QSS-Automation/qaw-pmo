@@ -15,7 +15,7 @@ from app.db.database import get_db
 from app.auth import get_current_resource, is_management, get_visible_project_ids
 from app.models import (
     Project, Resource, Allocation, MiscCost, Billing, Deal, PlanDraft,
-    ProjectStatus, RAGStatus, DealStage, FeaturePermission, ACCESS_ROLES
+    ProjectStatus, RAGStatus, DealStage, FeaturePermission, ACCESS_ROLES, AppSettings
 )
 from app.services.salesforce import salesforce_service
 from app.services.autocount import autocount_service
@@ -357,6 +357,49 @@ def reactivate_project(project_id: int, db: Session = Depends(get_db)):
 # (section, row) pair in that sheet becomes one key here, grouped the same
 # way for the Permissions page's table.
 
+# ─── SETTINGS router — app name, live-editable by Admin ──────────────────────
+# Public GET on purpose: the sidebar and the (unauthenticated) invite-accept
+# page both need this before anyone has an identity to check permissions
+# against. Only the write side is Admin-gated.
+
+settings_router = APIRouter(prefix="/api/settings", tags=["Settings"])
+
+
+def _get_or_create_settings(db: Session) -> AppSettings:
+    s = db.query(AppSettings).first()
+    if not s:
+        s = AppSettings(app_name="PM Ecosystem")
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+    return s
+
+
+@settings_router.get("")
+def get_settings(db: Session = Depends(get_db)):
+    s = _get_or_create_settings(db)
+    return {"app_name": s.app_name}
+
+
+class AppSettingsUpdate(BaseModel):
+    app_name: str
+
+
+@settings_router.put("")
+def update_settings(
+    body: AppSettingsUpdate, db: Session = Depends(get_db),
+    current_resource: Optional[Resource] = Depends(get_current_resource),
+):
+    if not current_resource or current_resource.access_role != "Admin":
+        raise HTTPException(status_code=403, detail="Only Admin can change this.")
+    if not body.app_name.strip():
+        raise HTTPException(status_code=400, detail="App name can't be empty.")
+    s = _get_or_create_settings(db)
+    s.app_name = body.app_name.strip()
+    db.commit()
+    return {"app_name": s.app_name}
+
+
 admin_router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 FEATURE_KEYS = [
@@ -599,6 +642,7 @@ def accept_invite(token: str, db: Session = Depends(get_db)):
 
 
 
+@admin_router.get("/resources-roles")
 def list_resources_with_roles(db: Session = Depends(get_db), current_resource: Optional[Resource] = Depends(get_current_resource)):
     """Every resource's name + current access_role, for the role-assignment side of the Permissions page."""
     _require_admin(current_resource)
@@ -752,23 +796,6 @@ def _compute_allocation_detail(db: Session) -> Dict[str, Dict[int, dict]]:
                 print(f'[allocation-summary] PMO query failed for {p.project_code} (non-fatal): {e}')
 
     return detail
-
-
-def _compute_allocation_summary(db: Session) -> Dict[str, float]:
-    """Collapsed {resource_name: total_pct} view of _compute_allocation_detail — see there for the full explanation."""
-    detail = _compute_allocation_detail(db)
-    return {name: sum(proj["pct"] for proj in projs.values()) for name, projs in detail.items()}
-
-
-@resources_router.get("/allocation-summary")
-def get_resource_allocation_summary(db: Session = Depends(get_db)):
-    """
-    Used by the Resources master list to flag anyone whose accumulated total
-    exceeds 100% with a warning — the 100% cap was removed as a hard block
-    (a resource CAN be over-allocated now), so this is how it surfaces
-    instead: visible, not blocking.
-    """
-    return {"totals": _compute_allocation_summary(db)}
 
 
 @resources_router.get("/{resource_id}/remaining-capacity")
@@ -1666,13 +1693,21 @@ def test_pmo_connection():
 
 @integrations_router.get("/status")
 def integration_status():
-    """Returns the status of all integrations."""
+    """Returns the status of all integrations, including whether each is currently running on mock/demo data."""
     from app.db.mysql import is_configured, test_connection
+    from app.config import settings
     ok, msg = test_connection()
     return {
         "mysql": {
             "configured": is_configured(),
             "connected":  ok,
             "message":    msg,
-        }
+        },
+        "salesforce": {
+            "mock": settings.SF_AUTH_METHOD == "mock",
+            "auth_method": settings.SF_AUTH_METHOD,
+        },
+        "autocount": {
+            "mock": settings.AUTOCOUNT_MOCK,
+        },
     }
