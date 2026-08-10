@@ -490,6 +490,21 @@ class Deal(Base):
 ACCESS_ROLES = ["Admin", "Management", "Project Manager", "Account Manager", "Team Member"]
 
 
+class AppSettings(Base):
+    """
+    Single-row table for values that need to be live-editable by Admin
+    directly in the interface, rather than baked into .env at deploy time.
+    Currently just the app name shown in the sidebar/browser tab/invite
+    page — this exists specifically so this codebase can be resold as a
+    template and rebranded per client from the Permissions page, without
+    anyone touching code or restarting the backend.
+    """
+    __tablename__ = "app_settings"
+
+    id       = Column(Integer, primary_key=True)
+    app_name = Column(String(100), nullable=False, default="PM Ecosystem")
+
+
 class FeaturePermission(Base):
     """
     First-layer, global permission matrix: for each (role, feature_key) pair,
