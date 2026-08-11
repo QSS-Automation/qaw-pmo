@@ -868,8 +868,10 @@ function ActualSection({ project }: { project: Project }) {
   const isCurrentMonth  = month.year === now.year && month.month === now.month
   const isPastMonth     = month.year < now.year || (month.year === now.year && month.month < now.month)
   const isFutureMonth   = month.year > now.year || (month.year === now.year && month.month > now.month)
-  // Already submitted if actual_resource has any rows for this month (fetched via submit_date filter)
-  const alreadySubmittedActual = (actualData?.resources || []).length > 0
+  // Already submitted only if this month has its OWN rows — not a prior-month
+  // placeholder the backend fills in so allocations don't misleadingly read 0%
+  // (see is_fallback on the /actual endpoint).
+  const alreadySubmittedActual = (actualData?.resources || []).length > 0 && !actualData?.is_fallback
   // Plan & Actual edit access — same backend-driven check as PlanSection.
   const { data: planActualAccess } = useQuery({
     queryKey: ['pmo-my-access', project.project_code],
