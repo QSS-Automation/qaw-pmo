@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Save, Send, AlertCircle, Check, Globe, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -494,7 +494,17 @@ function PlanSection({ project }: { project: Project }) {
     enabled:  !!pc,
   })
 
+  // Guards against re-hydrating (and thereby clobbering) in-progress local
+  // edits every time any of this effect's dependencies refetch — including
+  // the refetch triggered by the user's OWN Save click. Without this, saving
+  // could invalidate `serverDraft`, this effect would fire again, and if it
+  // ran before the fresh data had actually landed, it would overwrite the
+  // just-added row with what was there before the save.
+  const hydratedKeyRef = useRef<string | null>(null)
+
   useEffect(() => {
+    const hydrationKey = `${pc}:${month.year}:${month.month}`
+    const alreadyHydrated = hydratedKeyRef.current === hydrationKey
     if (planData) {
       // Use plan DB data if available, otherwise fall back to local project record
       const baseProject = planData.project
@@ -528,7 +538,7 @@ function PlanSection({ project }: { project: Project }) {
             start_date:        project.start_date,
             target_end_date:   project.original_end_date,
           }
-      setProjForm(baseProject)
+      if (!alreadyHydrated) setProjForm(baseProject)
 
       // Look up monthly_salary from Resources master list by staff_name
       const enrichWithSalary = (rows: any[]) => rows.map((r: any) => {
@@ -538,27 +548,33 @@ function PlanSection({ project }: { project: Project }) {
 
       // If plan has no resources yet, pre-fill from the saved draft — falling
       // back further to last month's actual if there's no draft either (e.g.
-      // a month nobody has touched at all yet).
-      const planResources = planData.resources || []
-      if (planResources.length === 0 && serverDraft?.resources?.length > 0) {
-        setResources(enrichWithSalary(serverDraft.resources))
-      } else if (planResources.length === 0 && lastActual?.resources?.length > 0) {
-        setResources(enrichWithSalary(lastActual.resources))
-      } else {
-        setResources(enrichWithSalary(planResources))
+      // a month nobody has touched at all yet). Only on first hydration for
+      // this project/month — see hydratedKeyRef above for why.
+      if (!alreadyHydrated) {
+        const planResources = planData.resources || []
+        if (planResources.length === 0 && serverDraft?.resources?.length > 0) {
+          setResources(enrichWithSalary(serverDraft.resources))
+        } else if (planResources.length === 0 && lastActual?.resources?.length > 0) {
+          setResources(enrichWithSalary(lastActual.resources))
+        } else {
+          setResources(enrichWithSalary(planResources))
+        }
       }
 
       // Misc costs (Revenue Deduction) — same pre-fill priority as resources
-      const planMiscCosts = planData.misc_costs || []
-      if (planMiscCosts.length === 0 && serverDraft?.misc_costs?.length > 0) {
-        setMiscCosts(serverDraft.misc_costs)
-      } else if (planMiscCosts.length === 0 && lastActual?.misc_costs?.length > 0) {
-        setMiscCosts(lastActual.misc_costs)
-      } else {
-        setMiscCosts(planMiscCosts)
+      if (!alreadyHydrated) {
+        const planMiscCosts = planData.misc_costs || []
+        if (planMiscCosts.length === 0 && serverDraft?.misc_costs?.length > 0) {
+          setMiscCosts(serverDraft.misc_costs)
+        } else if (planMiscCosts.length === 0 && lastActual?.misc_costs?.length > 0) {
+          setMiscCosts(lastActual.misc_costs)
+        } else {
+          setMiscCosts(planMiscCosts)
+        }
       }
+      hydratedKeyRef.current = hydrationKey
     }
-  }, [planData, serverDraft, lastActual, allResources])
+  }, [planData, serverDraft, lastActual, allResources, pc, month.year, month.month])
 
   // Submit button hidden only when the currently selected month is already submitted
   const alreadySubmittedThisMonth = (submittedMonths as any[]).some(s =>
@@ -841,8 +857,15 @@ function ActualSection({ project }: { project: Project }) {
 
   const [resources,  setResources]  = useState<any[]>([])
   const [miscCosts,  setMiscCosts]  = useState<any[]>([])
+  // Same hydration guard as PlanSection — prevents this effect from
+  // clobbering in-progress edits every time actualData/planData refetch in
+  // the background, rather than only when the project/month first loads.
+  const hydratedKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
+    const hydrationKey = `${pc}:${month.year}:${month.month}`
+    if (hydratedKeyRef.current === hydrationKey) return
+
     const enrichWithSalary = (rows: any[]) => rows.map((r: any) => {
       const match = (allResources as any[]).find((res: any) => res.name === r.staff_name)
       return { ...r, monthly_salary: r.monthly_salary || match?.monthly_cost || 0 }
@@ -863,7 +886,8 @@ function ActualSection({ project }: { project: Project }) {
       setMiscCosts(planMiscCosts)
     }
     // else: nothing yet — user adds from scratch
-  }, [actualData, planData, allResources])
+    hydratedKeyRef.current = hydrationKey
+  }, [actualData, planData, allResources, pc, month.year, month.month])
 
   const isCurrentMonth  = month.year === now.year && month.month === now.month
   const isPastMonth     = month.year < now.year || (month.year === now.year && month.month < now.month)
@@ -932,15 +956,22 @@ function ActualSection({ project }: { project: Project }) {
     rag !== serverDraft.rag
   )
 
-  // Load draft into the editable state when it arrives (only for current month)
+  // Load draft into the editable state when it arrives (only for current month).
+  // Separate guard from hydratedKeyRef above — this effect specifically
+  // layers the draft ON TOP of whatever the first effect already set, so it
+  // needs its own "have I done this yet" tracking rather than sharing one.
+  const draftHydratedKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isCurrentMonth || !serverDraft) return
+    const hydrationKey = `${pc}:${month.year}:${month.month}`
+    if (draftHydratedKeyRef.current === hydrationKey) return
     if (serverDraft.resources?.length > 0 || serverDraft.misc_costs?.length > 0) {
       setResources(serverDraft.resources || [])
       setMiscCosts(serverDraft.misc_costs || [])
       if (serverDraft.rag) setRag(serverDraft.rag)
     }
-  }, [serverDraft, isCurrentMonth])
+    draftHydratedKeyRef.current = hydrationKey
+  }, [serverDraft, isCurrentMonth, pc, month.year, month.month])
 
   const [justSaved, setJustSaved] = useState(false)
   const saveDraftMut = useMutation({
