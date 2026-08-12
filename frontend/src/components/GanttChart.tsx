@@ -131,7 +131,7 @@ function SubActivityForm({ initial, categories, activities, onSubmit, onCancel }
   const [start, setStart]   = useState(initial?.planned_start || '')
   const [end, setEnd]       = useState(initial?.planned_end || '')
   const isEdit = !!initial && initial.task_name !== ''
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
@@ -941,7 +941,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
   const [editingTask, setEditingTask] = useState<any | null>(null)
   const [showAccessDebug, setShowAccessDebug] = useState(false)
   const [showPendingApprovals, setShowPendingApprovals] = useState(false)
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
 
   const { data: pendingData } = useQuery({
     queryKey: ['pending-date-changes', projectId],
