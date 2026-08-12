@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { Project, Resource, Deal, Billing, BudgetSummary } from '../types'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || '/api' })
+const api = axios.create({ baseURL: '/api' })
 
 // Interim identity system — sends whichever Resource the user picked as
 // "logged in as" on every request, until real Azure AD SSO replaces this.
@@ -204,6 +204,8 @@ export const getGanttProgressSummary = (projectId: number) =>
 // ── Admin — first-layer permission matrix ─────────────────────────────────────
 export const getPermissions = () =>
   api.get('/admin/permissions').then(r => r.data)
+export const getMyPermissions = (): Promise<Record<string, { can_view: boolean; can_edit: boolean }>> =>
+  api.get('/admin/my-permissions').then(r => r.data)
 export const updatePermission = (data: { feature_key: string; role: string; can_view: boolean; can_edit: boolean }) =>
   api.put('/admin/permissions', data).then(r => r.data)
 export const getResourcesWithRoles = () =>
