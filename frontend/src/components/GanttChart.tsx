@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -932,9 +932,26 @@ function PendingApprovalsPanel({ projectId, onClose }: { projectId: number; onCl
   )
 }
 
-export function ProjectGanttSection({ projectId, canEdit }: { projectId: number; canEdit: boolean }) {
+export function ProjectGanttSection({ projectId, scheduleCanView, scheduleCanEdit, milestonesCanView, milestonesCanEdit, updateProgressCanView, updateProgressCanEdit }: {
+  projectId: number;
+  scheduleCanView: boolean; scheduleCanEdit: boolean;
+  milestonesCanView: boolean; milestonesCanEdit: boolean;
+  updateProgressCanView: boolean; updateProgressCanEdit: boolean;
+}) {
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'dashboard'|'schedule'|'update'|'scurve'|'milestones'>('dashboard')
+  // Dashboard/Schedule/S-Curve are all views of the same underlying WBS data
+  // (drilldown.schedule) — Milestones and Update Progress each have their
+  // own, independent gate below, matching their own row in the Permissions
+  // matrix (they used to all share Schedule's single gate).
+  const availableTabs = (['dashboard','schedule','milestones','update','scurve'] as const)
+    .filter(t => t === 'milestones' ? milestonesCanView : t === 'update' ? updateProgressCanView : scheduleCanView)
+  const [tab, setTab] = useState<'dashboard'|'schedule'|'update'|'scurve'|'milestones'>(availableTabs[0] ?? 'dashboard')
+  // If the tab we're on stops being available (e.g. access changed, or the
+  // default 'dashboard' isn't actually in availableTabs for this user),
+  // fall back to whatever the user can actually see instead of a blank pane.
+  useEffect(() => {
+    if (!availableTabs.includes(tab) && availableTabs.length > 0) setTab(availableTabs[0])
+  }, [availableTabs.join(','), tab])
   const [showAddForm, setShowAddForm] = useState(false)
   const [prefillCategory, setPrefillCategory] = useState<string | undefined>()
   const [prefillActivity, setPrefillActivity] = useState<string | undefined>()
@@ -1020,7 +1037,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
   return (
     <div className="space-y-4">
       <div className="flex gap-0.5 bg-gray-100 p-0.5 rounded-lg w-fit">
-        {(['dashboard','schedule','milestones','update','scurve'] as const).map(t => (
+        {availableTabs.map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${tab===t?'bg-white text-gray-900 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>
             {t === 'dashboard' && <LayoutDashboard size={12}/>}
@@ -1030,8 +1047,12 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
         ))}
       </div>
 
+      {availableTabs.length === 0 && (
+        <p className="text-sm text-gray-500 py-8 text-center">You don't have access to view any part of the Schedule.</p>
+      )}
+
       {tab === 'dashboard' && <WbsDashboard projectId={projectId}/>}
-      {tab === 'milestones' && <MilestonesPanel projectId={projectId} canEdit={canEdit}/>}
+      {tab === 'milestones' && <MilestonesPanel projectId={projectId} canEdit={milestonesCanEdit}/>}
 
       {tab === 'schedule' && (
         <>
@@ -1040,7 +1061,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
             <p className="text-[11px] text-gray-400">
               {tasks.length > 0 ? `${tasks.length} sub-activities loaded` : 'No sub-activities yet'}
             </p>
-            {!canEdit && (
+            {!scheduleCanEdit && (
               <span className="text-[11px] text-amber-600 flex items-center gap-1">
                 <AlertCircle size={11}/> Read-only — you don't have edit access to this project
               </span>
@@ -1055,12 +1076,12 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
                 Check someone's access
               </button>
             )}
-            {canEdit && wbsUploaded && (
+            {scheduleCanEdit && wbsUploaded && (
               <span className="text-[11px] text-gray-400 flex items-center gap-1">
                 <Upload size={11}/> WBS Excel already uploaded — edit sub-activities directly below
               </span>
             )}
-            {canEdit && !wbsUploaded && (
+            {scheduleCanEdit && !wbsUploaded && (
               <label className={`flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-violet-50 hover:border-violet-200 text-violet-600 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                 {uploading ? <Spinner size={12}/> : <Upload size={12}/>}
                 {uploading ? 'Uploading…' : 'Upload WBS Excel'}
@@ -1080,7 +1101,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
           {tasks.length === 0 && !showAddForm ? (
             <div className="text-center py-12 bg-white border border-gray-100 rounded-xl">
               <p className="text-gray-400 text-sm mb-1">No WBS sub-activities yet</p>
-              {canEdit ? (
+              {scheduleCanEdit ? (
                 <>
                   <p className="text-gray-400 text-xs mb-4">
                     {wbsUploaded ? 'Add sub-activities manually' : 'Upload an Excel file in the WBS format, or add one manually'}
@@ -1104,7 +1125,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
             </div>
           ) : rollup && (
             <GanttTimeline
-              rollup={rollup} tasks={tasks} rangeStart={rangeStart} rangeEnd={rangeEnd} canEdit={canEdit}
+              rollup={rollup} tasks={tasks} rangeStart={rangeStart} rangeEnd={rangeEnd} canEdit={scheduleCanEdit}
               editingTask={editingTask} categories={categories} activities={activities}
               showAddForm={showAddForm} prefillCategory={prefillCategory} prefillActivity={prefillActivity}
               onAddClick={(cat, act) => { setPrefillCategory(cat); setPrefillActivity(act); setShowAddForm(true) }}
@@ -1119,7 +1140,7 @@ export function ProjectGanttSection({ projectId, canEdit }: { projectId: number;
         </>
       )}
 
-      {tab === 'update' && <ProgressUpdatePanel tasks={tasks} projectId={projectId} statuses={statuses} canEdit={canEdit}/>}
+      {tab === 'update' && <ProgressUpdatePanel tasks={tasks} projectId={projectId} statuses={statuses} canEdit={updateProgressCanEdit}/>}
       {tab === 'scurve' && <SCurveChart projectId={projectId}/>}
     </div>
   )
