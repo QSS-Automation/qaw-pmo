@@ -1576,6 +1576,17 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
   })
   const scheduleCanEdit = myAccess?.can_edit ?? false
   const showSchedule = myAccess?.can_view ?? false
+  // Milestones and Update Progress each have their own independent gate now
+  // (previously shared Schedule's single gate) — see the extended /my-access
+  // response in gantt.py.
+  const milestonesCanView = myAccess?.milestones_can_view ?? false
+  const milestonesCanEdit = myAccess?.milestones_can_edit ?? false
+  const updateProgressCanView = myAccess?.update_progress_can_view ?? false
+  const updateProgressCanEdit = myAccess?.update_progress_can_edit ?? false
+  // The overall Schedule *section* should still show if the user has access
+  // to ANY of its three tabs — not just the Schedule tab itself — otherwise
+  // someone with only Milestones access would see nothing at all here.
+  const showScheduleSection = showSchedule || milestonesCanView || updateProgressCanView
 
   const { data: summary } = useQuery({
     queryKey: ['budget-summary'],
@@ -1673,11 +1684,16 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
               <ProjectSummaryBar project={selected} isCompleted={isCompleted}/>
               <ProjectDetail project={selected}/>
             </div>
-          ) : showSchedule ? (
+          ) : showScheduleSection ? (
             <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
               <ProjectSummaryBar project={selected} isCompleted={isCompleted}/>
               <div className="border-t border-gray-100 px-4 py-4">
-                <ProjectGanttSection projectId={selected.id} canEdit={scheduleCanEdit}/>
+                <ProjectGanttSection
+                  projectId={selected.id}
+                  scheduleCanView={showSchedule} scheduleCanEdit={scheduleCanEdit}
+                  milestonesCanView={milestonesCanView} milestonesCanEdit={milestonesCanEdit}
+                  updateProgressCanView={updateProgressCanView} updateProgressCanEdit={updateProgressCanEdit}
+                />
               </div>
             </div>
           ) : (
