@@ -1575,6 +1575,7 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
     enabled:  !!selected,
   })
   const scheduleCanEdit = myAccess?.can_edit ?? false
+  const showSchedule = myAccess?.can_view ?? false
 
   const { data: summary } = useQuery({
     queryKey: ['budget-summary'],
@@ -1672,12 +1673,17 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
               <ProjectSummaryBar project={selected} isCompleted={isCompleted}/>
               <ProjectDetail project={selected}/>
             </div>
-          ) : (
+          ) : showSchedule ? (
             <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
               <ProjectSummaryBar project={selected} isCompleted={isCompleted}/>
               <div className="border-t border-gray-100 px-4 py-4">
                 <ProjectGanttSection projectId={selected.id} canEdit={scheduleCanEdit}/>
               </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+              <ProjectSummaryBar project={selected} isCompleted={isCompleted}/>
+              <p className="text-sm text-gray-500 py-8 text-center">You don't have access to view the Schedule.</p>
             </div>
           )}
         </>
