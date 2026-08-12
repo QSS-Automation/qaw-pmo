@@ -1,7 +1,13 @@
 import axios from 'axios'
 import type { Project, Resource, Deal, Billing, BudgetSummary } from '../types'
 
-const api = axios.create({ baseURL: '/api' })
+// Relative '/api' only resolves correctly in local dev, where vite.config.ts's
+// own server.proxy forwards it to localhost:8000. In production the frontend
+// (Azure Static Web Apps) and backend (a separate Linux server) are on
+// completely different domains — no config file in this repo can make a
+// relative path cross that boundary, so production needs the real, absolute
+// backend URL instead.
+const api = axios.create({ baseURL: import.meta.env.DEV ? '/api' : 'https://qawpmo.quandatics.com/api' })
 
 // Interim identity system — sends whichever Resource the user picked as
 // "logged in as" on every request, until real Azure AD SSO replaces this.
