@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, GitCompare, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { getBudgetSummary, getBudgetCompare } from '../api'
+import { useMyPermissions } from '../hooks/useMyPermissions'
 import { PageHeader } from '../components/layout/Layout'
 import { MetricCard, Badge, Spinner, Callout, Td, Table, Th } from '../components/ui'
 import { fmtMYR, fmtPct, ragColor, projColor } from '../utils'
@@ -15,6 +16,7 @@ function thisYear()  { return new Date().getFullYear() }
 function thisMonth() { return new Date().getMonth() + 1 }
 
 export default function BudgetPage() {
+  const { canView } = useMyPermissions()
   const { data, isLoading } = useQuery({ queryKey: ['budget'], queryFn: getBudgetSummary })
 
   const [showCompare, setShowCompare] = useState(false)
@@ -29,6 +31,9 @@ export default function BudgetPage() {
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><Spinner size={28}/></div>
   if (!data) return null
+  if (!canView('budget.utilization')) return (
+    <div className="p-6"><p className="text-sm text-gray-500 py-8 text-center">You don't have access to view Budget Utilization.</p></div>
+  )
 
   const chartData = data.projects.map((p: any) => ({
     name:     p.short_name.length > 12 ? p.short_name.slice(0, 12) + '…' : p.short_name,

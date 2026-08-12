@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useMyPermissions } from '../hooks/useMyPermissions'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Save, Send, AlertCircle, Check, Globe, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -1288,7 +1289,7 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
   showChevron?: boolean;
 }) {
   const qc = useQueryClient()
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
   const { data: wbsProgress } = useQuery({
     queryKey: ['gantt-progress-summary', project.id],
     queryFn:  () => getGanttProgressSummary(project.id),
@@ -1409,7 +1410,7 @@ function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
   const status   = ragStatus(project.rag)
   const duration = monthsBetween(project.start_date, project.original_end_date)
   const qc = useQueryClient()
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
   const { data: wbsProgress } = useQuery({
     queryKey: ['gantt-progress-summary', project.id],
     queryFn:  () => getGanttProgressSummary(project.id),
@@ -1497,6 +1498,7 @@ function PortfolioView({ projects, isCompleted, onView }: {
   isCompleted: boolean;
   onView: (project: Project) => void;
 }) {
+  const { canView } = useMyPermissions()
   const { data: summary } = useQuery({
     queryKey: ['budget-summary'],
     queryFn:  () => getBudgetSummary(),
@@ -1506,10 +1508,17 @@ function PortfolioView({ projects, isCompleted, onView }: {
   const budgetByProjectId: Record<number, any> = {}
   ;(summary?.projects || []).forEach((r: any) => { budgetByProjectId[r.project_id] = r })
 
+  const cardsFeatureKey = isCompleted ? 'completed.all_projects' : 'portfolio.active_projects'
+
   return (
     <div>
-      {!isCompleted && summary && <PortfolioKpiStrip summary={summary}/>}
+      {!isCompleted && summary && canView('portfolio.summary') && <PortfolioKpiStrip summary={summary}/>}
 
+      {!canView(cardsFeatureKey) ? (
+        <p className="text-sm text-gray-500 py-8 text-center">
+          You don't have access to view {isCompleted ? 'completed projects' : 'active projects'}.
+        </p>
+      ) : (
       <div className="bg-white border border-gray-100 rounded-xl p-4">
         <p className="text-sm font-semibold text-gray-800 mb-3">
           {isCompleted ? 'All completed projects' : 'All active projects'}
@@ -1526,6 +1535,7 @@ function PortfolioView({ projects, isCompleted, onView }: {
           ))}
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -1538,6 +1548,7 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
   onSelect: (id: number) => void;
 }) {
   const selected = projects.find(p => p.id === selectedId) || projects[0] || null
+  const { canView } = useMyPermissions()
   // Plan & Actual visibility/edit — asked directly from the backend (same
   // function the API itself enforces), same pattern as Schedule's my-access
   // just below. A project's own PM can now VIEW but never edit; everyone
@@ -1611,7 +1622,7 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
           )}
 
           {/* KPI header cards */}
-          {budgetRow && (
+          {budgetRow && canView('drilldown.summary') && (
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white border border-gray-100 rounded-xl p-4">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Contract Value</p>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Edit2, Trash2, Plus, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getResources, createResource, updateResource, deleteResource } from '../api'
+import { useMyPermissions } from '../hooks/useMyPermissions'
 import { PageHeader } from '../components/layout/Layout'
 import { MetricCard, Spinner, Modal, Field, Input, Select, Table, Th, Td } from '../components/ui'
 import { fmtMYR, projColor } from '../utils'
@@ -101,6 +102,7 @@ function ResourceModal({ resource, onClose }: { resource?: Resource; onClose: ()
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ResourcesPage() {
   const qc = useQueryClient()
+  const { canView, canEdit } = useMyPermissions()
   const [modalResource, setModalResource] = useState<Resource | null | 'new'>(null)
 
   const { data: resources, isLoading } = useQuery({ queryKey: ['resources'], queryFn: () => getResources() })
@@ -129,14 +131,17 @@ export default function ResourcesPage() {
         desc="Headcount, allocation and status"
         tag={`${totalHC} people`}
         actions={
-          <button onClick={() => setModalResource('new')}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">
-            <Plus size={12}/> Add resource
-          </button>
+          canEdit('resources.table') && (
+            <button onClick={() => setModalResource('new')}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <Plus size={12}/> Add resource
+            </button>
+          )
         }
       />
 
       {/* Sticky metrics */}
+      {canView('resources.summary') && (
       <div className="sticky top-14 z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)] px-6 py-4">
         <div className="grid grid-cols-4 gap-3">
           <MetricCard label="Total headcount" value={totalHC} sub={`${activeCount} active`}/>
@@ -146,8 +151,13 @@ export default function ResourcesPage() {
             valueClass={overAlloc > 0 ? 'text-red-600' : 'text-emerald-700'}/>
         </div>
       </div>
+      )}
 
       <div className="p-6">
+        {!canView('resources.table') ? (
+          <p className="text-sm text-gray-500 py-8 text-center">You don't have access to view the resource list.</p>
+        ) : (
+        <>
         <p className="text-[11px] text-gray-400 mb-3">
           "Total %" reflects this month's Actual section — the current saved draft if one exists, otherwise what's already been submitted. Being over 100% is allowed and just gets flagged here; it no longer blocks saving or submitting.
         </p>
@@ -213,29 +223,39 @@ export default function ResourcesPage() {
                     </Td>
                     <Td>
                       {/* Editable status dropdown — Active / No Project / Resigned */}
-                      <select
-                        value={r.status}
-                        onChange={e => statusMut.mutate({ id: r.id, status: e.target.value })}
-                        className={`text-xs font-medium px-2 py-1 rounded-full border-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-300 ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      {canEdit('resources.table') ? (
+                        <select
+                          value={r.status}
+                          onChange={e => statusMut.mutate({ id: r.id, status: e.target.value })}
+                          className={`text-xs font-medium px-2 py-1 rounded-full border-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-300 ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      ) : (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {r.status}
+                        </span>
+                      )}
                     </Td>
                     <Td>
-                      <div className="flex gap-1">
-                        <button onClick={() => setModalResource(r)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Edit">
-                          <Edit2 size={11} className="text-blue-500"/>
-                        </button>
-                        <button onClick={() => { if (confirm(`Remove ${r.name}?`)) deleteMut.mutate(r.id) }}
-                          className="p-1.5 hover:bg-red-50 rounded-lg" title="Delete">
-                          <Trash2 size={11} className="text-red-400"/>
-                        </button>
-                      </div>
+                      {canEdit('resources.table') && (
+                        <div className="flex gap-1">
+                          <button onClick={() => setModalResource(r)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Edit">
+                            <Edit2 size={11} className="text-blue-500"/>
+                          </button>
+                          <button onClick={() => { if (confirm(`Remove ${r.name}?`)) deleteMut.mutate(r.id) }}
+                            className="p-1.5 hover:bg-red-50 rounded-lg" title="Delete">
+                            <Trash2 size={11} className="text-red-400"/>
+                          </button>
+                        </div>
+                      )}
                     </Td>
                   </tr>
                 )
               })}
             </tbody>
           </Table>
+          )}
+        </>
         )}
       </div>
 

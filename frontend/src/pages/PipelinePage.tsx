@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Zap, Ban, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getPipeline, getClosedWon, convertDeal, markDealConverted, getResources, getRemainingCapacity, getCurrentResourceInfo } from '../api'
+import { useMyPermissions } from '../hooks/useMyPermissions'
 import { PageHeader } from '../components/layout/Layout'
 import { MetricCard, Badge, Spinner, Modal, Field, Input, Select, Table, Th, Td, Callout } from '../components/ui'
 import { fmtMYR, fmtDate, stageColor } from '../utils'
@@ -38,7 +39,7 @@ function ProbabilityBar({ pct }: { pct: number }) {
 // and curated_deals table so it stops appearing in Upcoming Projects.
 function MarkConvertedButton({ sfId }: { sfId: string }) {
   const qc = useQueryClient()
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
   const mut = useMutation({
     mutationFn: () => markDealConverted(sfId),
     onSuccess: () => {
@@ -345,7 +346,10 @@ function ConvertModal({ deal, resources, onClose }: { deal: Deal; resources: Res
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PipelinePage() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
-  const isManagement = getCurrentResourceInfo()?.resource_type === 'Management'
+  // Same class of bug as the backend's is_management() had — checked
+  // resource_type (employment category) instead of access_role (RBAC role).
+  const isManagement = ['Management', 'Admin'].includes(getCurrentResourceInfo()?.access_role ?? '')
+  const { canView } = useMyPermissions()
 
   const { data: deals, isLoading } = useQuery({ queryKey: ['pipeline'], queryFn: getPipeline })
   const { data: closedWon }         = useQuery({ queryKey: ['closed-won'], queryFn: getClosedWon })
@@ -372,7 +376,7 @@ export default function PipelinePage() {
       <div className="p-6">
 
         {/* ── Closed Won banner ── */}
-        {(closedWon?.length ?? 0) > 0 && (
+        {canView('main.conversion_window') && (closedWon?.length ?? 0) > 0 && (
           <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
@@ -414,6 +418,7 @@ export default function PipelinePage() {
         )}
 
         {/* ── Metrics ── */}
+        {canView('main.upcoming_summary') && (
         <div className="grid grid-cols-4 gap-3 mb-5">
           <MetricCard label="Active deals"     value={deals?.filter(d => !d.is_converted).length ?? 0} sub="3B + 4A + Closed Won"/>
           <MetricCard label="Total pipeline"   value={fmtMYR(totalPipeline)} sub="gross" valueClass="text-blue-700"/>
@@ -421,9 +426,12 @@ export default function PipelinePage() {
           <MetricCard label="Needs conversion" value={closedWon?.length ?? 0} sub="awarded — action required"
             valueClass={(closedWon?.length ?? 0) > 0 ? 'text-amber-600' : 'text-gray-700'}/>
         </div>
+        )}
 
         {/* ── Pipeline table ── */}
-        {isLoading ? <div className="flex justify-center py-16"><Spinner size={28}/></div> : (
+        {!canView('main.upcoming_table') ? (
+          <p className="text-sm text-gray-500 py-8 text-center">You don't have access to view the upcoming projects table.</p>
+        ) : isLoading ? <div className="flex justify-center py-16"><Spinner size={28}/></div> : (
           <Table>
             <thead>
               <tr>
