@@ -90,11 +90,11 @@ function SidebarFooter() {
         className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-gray-400">
         <option value="">— Select your name —</option>
         {(resources as any[]).map(r => (
-          <option key={r.id} value={r.id}>{r.name}{r.resource_type === 'Management' ? ' (Management)' : ''}</option>
+          <option key={r.id} value={r.id}>{r.name}{['Management', 'Admin'].includes(r.access_role) ? ` (${r.access_role})` : ''}</option>
         ))}
       </select>
-      {current?.resource_type === 'Management' && (
-        <p className="text-[10px] text-violet-500 mt-1">✦ Management — full access to all projects</p>
+      {['Management', 'Admin'].includes(current?.access_role ?? '') && (
+        <p className="text-[10px] text-violet-500 mt-1">✦ {current?.access_role} — full access to all projects</p>
       )}
       {!current && (
         <p className="text-[10px] text-amber-500 mt-1">⚠ Select who you are to see your projects</p>
