@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Database, CheckCircle, XCircle, AlertCircle, Server, HardDrive } from 'lucide-react'
-import { testCrmConnection, testPmoConnection, getIntegrationStatus } from '../api'
+import { testCrmConnection, testPmoConnection } from '../api'
 import { PageHeader } from '../components/layout/Layout'
 
 type ConnResult = {
@@ -142,8 +141,6 @@ function ConnectionCard({
 }
 
 export function IntegrationsPage() {
-  const { data: status } = useQuery({ queryKey: ['integration-status'], queryFn: getIntegrationStatus })
-
   return (
     <>
       <PageHeader
@@ -154,31 +151,29 @@ export function IntegrationsPage() {
 
       <div className="p-6 max-w-3xl space-y-4">
 
-        {/* ── CRM / Finance mock status ── */}
-        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-50">
-          {[
-            { label: 'CRM (Salesforce)', mock: status?.salesforce?.mock, detail: status?.salesforce ? `SF_AUTH_METHOD=${status.salesforce.auth_method}` : null, envVar: 'SF_AUTH_METHOD' },
-            { label: 'Finance (Autocount)', mock: status?.autocount?.mock, detail: null, envVar: 'AUTOCOUNT_MOCK' },
-          ].map(row => (
-            <div key={row.label} className="flex items-center gap-4 px-5 py-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-                <Server size={20} className="text-amber-600"/>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">{row.label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {row.mock === undefined ? 'Checking…' : row.mock
-                    ? <>Running on sample data — set <code className="font-mono bg-gray-100 px-1 rounded">{row.envVar}</code> in <code className="font-mono bg-gray-100 px-1 rounded">.env</code> to connect a real system</>
-                    : <>Connected to a real system{row.detail ? ` (${row.detail})` : ''}</>}
-                </p>
-              </div>
-              {row.mock !== undefined && (
-                <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${row.mock ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                  {row.mock ? <><AlertCircle size={11}/> Mock data</> : <><CheckCircle size={11}/> Live</>}
+        {/* ── Setup guide ── */}
+        <div className="bg-white border border-gray-100 rounded-xl p-5">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
+            Connecting a real system — 4 steps
+          </p>
+          <ol className="space-y-3">
+            {[
+              ['Add the credentials below to backend/.env', 'Each connection card further down lists the exact lines it needs.'],
+              ['Restart the backend process', 'Environment variables are only read once, at startup — editing .env alone has no effect until the process restarts.'],
+              ['Click "Test connection" on each card', 'Confirms the credentials actually work, not just that they\u2019re present.'],
+              ['If a test fails, check Common issues below', 'Covers the specific failures every one of these connections has actually hit before.'],
+            ].map(([title, detail], i) => (
+              <li key={title} className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-900 text-white text-xs font-semibold flex items-center justify-center mt-0.5">
+                  {i + 1}
                 </span>
-              )}
-            </div>
-          ))}
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{detail}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
 
         {/* ── CRM connection ── */}
@@ -248,27 +243,30 @@ export function IntegrationsPage() {
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-2 text-gray-400 font-semibold">Database column</th>
-                <th className="text-left py-2 text-gray-400 font-semibold">Used as</th>
+                <th className="text-left py-2 pr-4 text-gray-400 font-semibold">Database column</th>
+                <th className="text-left py-2 pr-4 text-gray-400 font-semibold">Used as</th>
+                <th className="text-left py-2 text-gray-400 font-semibold">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {[
-                ['opportunity_id',      'Unique deal ID (sf_opportunity_id)'],
-                ['deal_name',           'Deal name'],
-                ['account_name',        'Customer / Account'],
-                ['account_owner',       'Deal owner'],
-                ['project_code',        'Project code'],
-                ['estimated_amount',    'Deal amount (MYR)'],
-                ['currency',            'Deal currency'],
-                ['sales_stage',         'Pipeline stage'],
-                ['probability',         'Win probability %'],
-                ['expected_close_date', 'Expected close date'],
-                ['etl_loaded_at',       'Last synced'],
-              ].map(([col, use]) => (
+                ['project_code',        'Unique deal key (sf_opportunity_id)', 'Same value this app later matches to a real project once converted'],
+                ['deal_name',           'Deal name', ''],
+                ['account_name',        'Customer / Account', ''],
+                ['account_owner',       'Deal owner', ''],
+                ['estimated_amount',    'Deal amount', 'Always treated as MYR — there\u2019s no separate currency column'],
+                ['sales_stage',         'Pipeline stage', 'Only 3B, 4A and Closed Won ever show in Upcoming Projects'],
+                ['probability',         'Win probability %', ''],
+                ['expected_close_date', 'Expected close date', 'Closed Won deals from before this year are hidden'],
+                ['award_date',          'Award date', 'Required (not null) for a Closed Won deal to actually appear'],
+                ['is_converted',        'Already turned into a project?', 'Set by this app, not the ETL — never overwritten on refresh'],
+                ['salesforce_id',       'Salesforce\u2019s own record ID', 'Used by the ETL to match existing rows on refresh — not read by this app'],
+                ['etl_loaded_at',       'Last refreshed', ''],
+              ].map(([col, use, note]) => (
                 <tr key={col} className="hover:bg-gray-50/50">
-                  <td className="py-2 pr-4 font-mono text-blue-700">{col}</td>
-                  <td className="py-2 text-gray-600">{use}</td>
+                  <td className="py-2 pr-4 font-mono text-blue-700 align-top whitespace-nowrap">{col}</td>
+                  <td className="py-2 pr-4 text-gray-600 align-top whitespace-nowrap">{use}</td>
+                  <td className="py-2 text-gray-400 align-top">{note}</td>
                 </tr>
               ))}
             </tbody>
@@ -286,37 +284,76 @@ export function IntegrationsPage() {
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-2 text-gray-400 font-semibold">Table</th>
-                <th className="text-left py-2 text-gray-400 font-semibold">Has year/month?</th>
-                <th className="text-left py-2 text-gray-400 font-semibold">Written on</th>
+                <th className="text-left py-2 pr-4 text-gray-400 font-semibold">Table</th>
+                <th className="text-left py-2 pr-4 text-gray-400 font-semibold">Has year/month?</th>
+                <th className="text-left py-2 pr-4 text-gray-400 font-semibold">Written on</th>
+                <th className="text-left py-2 text-gray-400 font-semibold">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {[
-                ['plan_project',     'No',  'Convert + Submit Plan'],
-                ['plan_resource',    'Yes', 'Convert + Submit Plan'],
-                ['plan_misc_cost',   'No',  'Convert + Submit Plan'],
-                ['actual_project',   'No',  'Save Draft → Submit (Actual tab)'],
-                ['actual_resource',  'Yes', 'Save Draft → Submit (Actual tab)'],
-                ['actual_misc_cost', 'No',  'Save Draft → Submit (Actual tab)'],
-              ].map(([table, ym, when]) => (
+                ['plan_project',     'No',  'Convert + Submit Plan', ''],
+                ['plan_resource',    'Yes', 'Convert + Submit Plan', ''],
+                ['plan_misc_cost',   'No',  'Convert + Submit Plan', 'Primary key is an auto-increment id, not project_code — allows multiple itemized cost rows per project'],
+                ['actual_project',   'No',  'Save Draft \u2192 Submit (Actual tab)', 'revenue_deduction is the correct spelling — an earlier version had a typo; rename to match if you\u2019re on an old table'],
+                ['actual_resource',  'Yes', 'Save Draft \u2192 Submit (Actual tab)', ''],
+                ['actual_misc_cost', 'No',  'Save Draft \u2192 Submit (Actual tab)', 'Same auto-increment id primary key as plan_misc_cost'],
+              ].map(([table, ym, when, note]) => (
                 <tr key={table} className="hover:bg-gray-50/50">
-                  <td className="py-2 pr-4 font-mono text-blue-700">{table}</td>
-                  <td className="py-2 pr-4 text-gray-600">{ym}</td>
-                  <td className="py-2 text-gray-600">{when}</td>
+                  <td className="py-2 pr-4 font-mono text-blue-700 align-top whitespace-nowrap">{table}</td>
+                  <td className="py-2 pr-4 text-gray-600 align-top whitespace-nowrap">{ym}</td>
+                  <td className="py-2 pr-4 text-gray-600 align-top whitespace-nowrap">{when}</td>
+                  <td className="py-2 text-gray-400 align-top">{note}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="text-[11px] text-gray-400 mt-3">
-            Note: <code className="font-mono bg-gray-100 px-1 rounded">revenue_deduction</code> is the correct spelling in the schema
-            (an earlier version had a typo — if you're on an old table, rename the column to match).
-            Milestones no longer live in any of these tables — they moved to the Schedule section
-            (local SQLite only, no monthly push cycle). The two misc_cost tables use an auto-increment
-            <code className="font-mono bg-gray-100 px-1 rounded mx-1">id</code> as their primary key, not
-            <code className="font-mono bg-gray-100 px-1 rounded mx-1">project_code</code> — this allows
-            multiple itemized cost rows per project.
+            Milestones don't live in any of these tables — they moved to the Schedule section
+            (local SQLite only, no monthly push cycle).
           </p>
+        </div>
+
+        {/* ── Common issues ── */}
+        <div className="bg-white border border-gray-100 rounded-xl p-5">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
+            Common issues
+          </p>
+          <div className="divide-y divide-gray-50">
+            {[
+              {
+                symptom: '"Name or service not known" or "Error reading SSH protocol banner"',
+                cause: 'A value in .env has a comment on the same line as the setting — e.g. MYSQL_HOST=10.1.10.26 # my server. Nothing strips that comment; the whole line, including the # and everything after it, becomes part of the value itself.',
+                fix: 'Move comments to their own line, above the setting they describe — never on the same line as a real value.',
+              },
+              {
+                symptom: 'SSH tunnel fails even though the same host/user/password work fine with a plain ssh command',
+                cause: 'The installed paramiko version is too old to negotiate with a modern OpenSSH server.',
+                fix: 'pip install --upgrade paramiko, then restart the backend.',
+              },
+              {
+                symptom: 'Requests from the frontend get blocked by CORS, or silently hit the wrong backend entirely',
+                cause: 'The reverse proxy in front of this backend has no server block for the frontend\u2019s actual domain — requests fall through to a different server block (often a completely unrelated app on the same machine) instead of reaching this backend at all.',
+                fix: 'Add a dedicated server block for the frontend\u2019s exact domain, proxying to this backend\u2019s port.',
+              },
+              {
+                symptom: 'Backend won\u2019t start at all — TypeError mentioning unsupported operand type(s) for |',
+                cause: 'Newer Python union syntax like Dict[str, Any] | None only works on Python 3.10+. This app needs to run on whatever Python version the server actually has.',
+                fix: 'Use Optional[...] from the typing module instead, or confirm the server\u2019s Python version before writing new code.',
+              },
+              {
+                symptom: 'A feature that should exist returns 404, even though it works when tested locally',
+                cause: 'The version of the code actually running on the server predates that feature.',
+                fix: 'Redeploy the latest backend code and restart the service — this is a deployment gap, not a bug in the feature itself.',
+              },
+            ].map(({ symptom, cause, fix }) => (
+              <div key={symptom} className="py-3 first:pt-0 last:pb-0">
+                <p className="text-sm font-medium text-gray-800">{symptom}</p>
+                <p className="text-xs text-gray-500 mt-1"><span className="font-semibold text-gray-400">Cause — </span>{cause}</p>
+                <p className="text-xs text-gray-500 mt-1"><span className="font-semibold text-gray-400">Fix — </span>{fix}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── .env reference ── */}
