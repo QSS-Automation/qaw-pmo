@@ -1327,25 +1327,31 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
       </div>
       <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0">
         <span>{project.account_manager || '—'}</span>
-        <span>{fmtDate(project.start_date)} – {fmtDate(project.original_end_date)}</span>
-        {!clickable && (
-          editingRebase ? (
-            <span className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-              <input type="date" value={rebaseDraft} onChange={e => setRebaseDraft(e.target.value)}
-                className="border border-gray-200 rounded px-1.5 py-0.5 text-xs"/>
-              <button onClick={() => rebaseMut.mutate(rebaseDraft)} disabled={rebaseMut.isPending}
-                className="text-emerald-600 hover:text-emerald-700 font-medium">Save</button>
-              <button onClick={() => setEditingRebase(false)} className="text-gray-400 hover:text-gray-600">Cancel</button>
-            </span>
-          ) : (
-            <span
-              onClick={e => { e.stopPropagation(); setRebaseDraft(project.rebased_end_date || ''); setEditingRebase(true) }}
-              className="cursor-pointer hover:text-gray-700 border-b border-dashed border-gray-300"
-              title="Click to set or change the rebased end date">
-              Rebased: {project.rebased_end_date ? fmtDate(project.rebased_end_date) : 'Not set'}
-            </span>
-          )
-        )}
+        <span className="flex items-center gap-2">
+          <span>{fmtDate(project.start_date)} – {fmtDate(project.original_end_date)}</span>
+          {!clickable && (
+            editingRebase ? (
+              <span className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1" onClick={e => e.stopPropagation()}>
+                <input type="date" value={rebaseDraft} onChange={e => setRebaseDraft(e.target.value)}
+                  className="border border-indigo-200 rounded px-1.5 py-0.5 text-xs bg-white"/>
+                <button onClick={() => rebaseMut.mutate(rebaseDraft)} disabled={rebaseMut.isPending}
+                  className="text-emerald-600 hover:text-emerald-700 font-semibold px-1">Save</button>
+                <button onClick={() => setEditingRebase(false)} className="text-gray-400 hover:text-gray-600 px-1">Cancel</button>
+              </span>
+            ) : (
+              <span
+                onClick={e => { e.stopPropagation(); setRebaseDraft(project.rebased_end_date || ''); setEditingRebase(true) }}
+                className={`cursor-pointer rounded-lg px-2 py-1 font-semibold transition-colors ${
+                  project.rebased_end_date
+                    ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    : 'bg-amber-50 text-amber-700 border border-dashed border-amber-300 hover:bg-amber-100'
+                }`}
+                title="Click to set or change the rebased end date">
+                {project.rebased_end_date ? `Rebased: ${fmtDate(project.rebased_end_date)}` : '+ Rebase end date'}
+              </span>
+            )
+          )}
+        </span>
         <span className="font-semibold font-mono">{fmtMYR(project.contract_value_myr)}</span>
         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${project.rag==='Red'?'bg-red-500':project.rag==='Amber'?'bg-amber-400':'bg-emerald-500'}`}/>
       </div>
