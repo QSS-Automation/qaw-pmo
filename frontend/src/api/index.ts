@@ -9,18 +9,52 @@ import type { Project, Resource, Deal, Billing, BudgetSummary } from '../types'
 // backend URL instead.
 const api = axios.create({ baseURL: import.meta.env.DEV ? '/api' : 'https://qawpmo.quandatics.com/api' })
 
-// Interim identity system — sends whichever Resource the user picked as
-// "logged in as" on every request, until real Azure AD SSO replaces this.
+// Real session auth — sends this app's own signed session token (issued at
+// login, after a real Microsoft SSO sign-in was verified server-side) on
+// every request. Replaces the old X-Resource-Id header, which any client
+// could set to any value with zero verification at all.
 api.interceptors.request.use(config => {
-  const resourceId = typeof window !== 'undefined' ? localStorage.getItem('pm_resource_id') : null
-  if (resourceId) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('pm_session_token') : null
+  if (token) {
     config.headers = config.headers || {}
-    config.headers['X-Resource-Id'] = resourceId
+    config.headers['Authorization'] = `Bearer ${token}`
   }
   return config
 })
 
+// ── Session token storage ──────────────────────────────
+// Kept in localStorage, same as this app's other client-side state — worth
+// knowing that's readable by any script running on the page (unlike an
+// httpOnly cookie), which is the standard trade-off of this pattern for a
+// SPA served from a different domain than its API. The token itself is
+// short-lived (see ACCESS_TOKEN_EXPIRE_MINUTES on the backend) and useless
+// without a valid signature, which only the backend can produce.
+export const setSessionToken = (token: string | null) => {
+  if (typeof window === 'undefined') return
+  if (token) localStorage.setItem('pm_session_token', token)
+  else localStorage.removeItem('pm_session_token')
+}
+export const getSessionToken = (): string | null =>
+  typeof window !== 'undefined' ? localStorage.getItem('pm_session_token') : null
+
+// ── Microsoft SSO login ────────────────────────────────
+// idToken comes from MSAL, already verified once by Microsoft's own
+// sign-in flow — the backend verifies it AGAIN itself (never trusts a
+// frontend's word that a token is valid) before matching its email to a
+// Resource and issuing this app's own session token in return.
+export const ssoLogin = (idToken: string, inviteToken?: string) =>
+  api.post('/auth/sso-login', { id_token: idToken, invite_token: inviteToken || null }).then(r => r.data)
+
+export const logout = () => {
+  setSessionToken(null)
+  setCurrentResource(null)
+}
+
 // ── Current logged-in resource helpers ────────────────
+// setCurrentResource stores who the verified session belongs to, for the
+// UI to read (name, role, etc.) — the session token above is the only
+// thing that actually authenticates requests; this is just local, cached
+// display info about whoever that token belongs to.
 export const setCurrentResource = (resource: { id: number; name: string; resource_type: string; access_role?: string } | null) => {
   if (typeof window === 'undefined') return
   if (resource) {
@@ -228,8 +262,8 @@ export const revokeInvitation = (id: number) =>
   api.delete(`/admin/invitations/${id}`).then(r => r.data)
 export const resendInvitation = (id: number) =>
   api.post(`/admin/invitations/${id}/resend`).then(r => r.data)
-export const acceptInvite = (token: string) =>
-  api.get(`/accept-invite/${token}`).then(r => r.data)
+// acceptInvite removed — ssoLogin(idToken, inviteToken) above replaces it,
+// now that accepting an invitation requires a verified Microsoft sign-in.
 
 // ── Settings — app name, live-editable by Admin (public GET, Admin-only PUT) ──
 export const getSettings = () =>
