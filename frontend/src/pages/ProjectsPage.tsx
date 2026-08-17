@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Save, Send, AlertCircle, Check, Globe, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
-  getProjects, completeProject, getBudgetSummary,
+  getProjects, completeProject, updateProject, getBudgetSummary,
   getPmoPlan, getPmoActual, getPmoHistory, getPmoSubmittedMonths,
   submitPlan, pushActual, getActualDraft, saveActualDraft, getPlanDraft, savePlanDraft, getResources, getRemainingCapacity, getCurrentResourceInfo, getMyScheduleAccess, getGanttProgressSummary, getPmoMyAccess,
 } from '../api'
@@ -918,7 +918,7 @@ function ActualSection({ project }: { project: Project }) {
     project_name: project.name, customer: project.customer,
     entity: (project as any).entity, project_type: project.project_type,
     technology: project.technology, currency: (project as any).currency || 'MYR',
-    contract_value: project.contract_value_myr, project_budget: (project as any).project_budget || 0,
+    contract_value:    project.contract_value_myr, project_budget: (project as any).project_budget || 0,
     license_cost: (project as any).license_cost || 0, revenue_deduction: project.revenue_deduction || 0,
     account_manager: project.account_manager, start_date: project.start_date, target_end_date: project.original_end_date,
   }
@@ -1301,6 +1301,14 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
     onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to complete project'),
   })
 
+  const [editingRebase, setEditingRebase] = useState(false)
+  const [rebaseDraft, setRebaseDraft]     = useState(project.rebased_end_date || '')
+  const rebaseMut = useMutation({
+    mutationFn: (v: string) => updateProject(project.id, { rebased_end_date: v || null }),
+    onSuccess: () => { toast.success('Rebased end date updated'); qc.invalidateQueries({ queryKey: ['projects'] }); setEditingRebase(false) },
+    onError:   (err: any) => toast.error(err?.response?.data?.detail || 'Failed to update'),
+  })
+
   return (
     <div
       className={`flex items-center gap-3 px-4 py-3 select-none ${clickable ? 'cursor-pointer hover:bg-gray-50/60 transition-colors' : ''}`}
@@ -1318,8 +1326,26 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
         <p className="text-[11px] text-gray-400 mt-0.5">{(project as any).project_code || '—'} · {project.customer}</p>
       </div>
       <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0">
-        <span>{project.account_manager || project.project_manager || '—'}</span>
+        <span>{project.account_manager || '—'}</span>
         <span>{fmtDate(project.start_date)} – {fmtDate(project.original_end_date)}</span>
+        {!clickable && (
+          editingRebase ? (
+            <span className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <input type="date" value={rebaseDraft} onChange={e => setRebaseDraft(e.target.value)}
+                className="border border-gray-200 rounded px-1.5 py-0.5 text-xs"/>
+              <button onClick={() => rebaseMut.mutate(rebaseDraft)} disabled={rebaseMut.isPending}
+                className="text-emerald-600 hover:text-emerald-700 font-medium">Save</button>
+              <button onClick={() => setEditingRebase(false)} className="text-gray-400 hover:text-gray-600">Cancel</button>
+            </span>
+          ) : (
+            <span
+              onClick={e => { e.stopPropagation(); setRebaseDraft(project.rebased_end_date || ''); setEditingRebase(true) }}
+              className="cursor-pointer hover:text-gray-700 border-b border-dashed border-gray-300"
+              title="Click to set or change the rebased end date">
+              Rebased: {project.rebased_end_date ? fmtDate(project.rebased_end_date) : 'Not set'}
+            </span>
+          )
+        )}
         <span className="font-semibold font-mono">{fmtMYR(project.contract_value_myr)}</span>
         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${project.rag==='Red'?'bg-red-500':project.rag==='Amber'?'bg-amber-400':'bg-emerald-500'}`}/>
       </div>
@@ -1437,7 +1463,7 @@ function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
         <div>
           <p className="font-semibold text-sm text-gray-900">{project.name}</p>
           <p className="text-[11px] text-gray-400 mt-0.5">
-            {(project as any).project_code || '—'} · PM: {project.account_manager || project.project_manager || '—'}
+            {(project as any).project_code || '—'} · Account Manager: {project.account_manager || '—'}
             {duration !== null && ` · ${duration} months`}
           </p>
         </div>
@@ -1596,8 +1622,8 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
   const budgetRow = selected ? (summary?.projects || []).find((r: any) => r.project_id === selected.id) : null
 
   const status  = selected ? ragStatus(selected.rag) : null
-  const overBudget = budgetRow && budgetRow.budget_utilized > budgetRow.budget && budgetRow.budget > 0
-  const overrun = overBudget ? budgetRow.budget_utilized - budgetRow.budget : 0
+  const overBudget = budgetRow && budgetRow.budget_utilized > budgetRow.project_budget && budgetRow.project_budget > 0
+  const overrun = overBudget ? budgetRow.budget_utilized - budgetRow.project_budget : 0
 
   return (
     <div className="space-y-4">

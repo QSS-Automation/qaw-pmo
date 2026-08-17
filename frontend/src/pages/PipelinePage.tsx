@@ -191,6 +191,10 @@ function ConvertModal({ deal, resources, onClose }: { deal: Deal; resources: Res
             <Select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}>
               <option>MYR</option><option>PHP</option><option>SGD</option><option>USD</option>
             </Select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Records what currency this deal was actually in — doesn't convert anything.
+              Enter the MYR-equivalent amount yourself below.
+            </p>
           </Field>
           <Field label="Contract value (MYR)" required>
             <Input type="number" value={form.contract_value_myr} onChange={e => setForm(f => ({ ...f, contract_value_myr: +e.target.value }))}/>

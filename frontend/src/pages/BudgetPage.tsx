@@ -37,7 +37,7 @@ export default function BudgetPage() {
 
   const chartData = data.projects.map((p: any) => ({
     name:     p.short_name.length > 12 ? p.short_name.slice(0, 12) + '…' : p.short_name,
-    Budget:   Math.round(p.budget / 1000),
+    Budget:   Math.round(p.project_budget / 1000),
     Utilized: Math.round(p.budget_utilized / 1000),
   }))
 

@@ -159,14 +159,14 @@ export default function ResourcesPage() {
         ) : (
         <>
         <p className="text-[11px] text-gray-400 mb-3">
-          "Total %" reflects this month's Actual section — the current saved draft if one exists, otherwise what's already been submitted. Being over 100% is allowed and just gets flagged here; it no longer blocks saving or submitting.
+          "Current Total %" reflects this month's Actual section — the current saved draft if one exists, otherwise what's already been submitted. Being over 100% is allowed and just gets flagged here; it no longer blocks saving or submitting.
         </p>
         {isLoading ? <div className="flex justify-center py-16"><Spinner size={28}/></div> : (
           <Table>
             <thead>
               <tr>
                 <Th className="w-40">Name</Th><Th>Position</Th><Th>Role</Th><Th>Cost/mo</Th>
-                <Th>Total %</Th><Th>Projects</Th><Th>Status</Th>
+                <Th>Current Total %</Th><Th>Projects</Th><Th>Status</Th>
                 <Th className="w-20">{""}</Th>
               </tr>
             </thead>
