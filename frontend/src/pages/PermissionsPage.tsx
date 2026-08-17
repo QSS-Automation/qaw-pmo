@@ -291,7 +291,7 @@ function InvitationsPanel() {
   return (
     <div className="space-y-5 max-w-2xl">
       <p className="text-[11px] text-gray-400">
-        If email is configured, creating an invitation sends it directly. If not — or if sending fails for any reason — you'll get a link to copy and send yourself instead; the invitation is created either way. Whoever opens the link gets access on that device immediately, the same way picking a name from "Logged in as" already works.
+        If email is configured, creating an invitation sends it directly. If not — or if sending fails for any reason — you'll get a link to copy and send yourself instead; the invitation is created either way. Whoever opens the link signs in with their Microsoft account to get access — the Microsoft account they use must match the email address this invitation was sent to.
       </p>
 
       <form onSubmit={submit} className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">

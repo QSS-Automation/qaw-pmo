@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
-import { acceptInvite, setCurrentResource, getSettings } from '../api'
+import { ssoLogin, setSessionToken, setCurrentResource, getSettings } from '../api'
+import { msalInstance, loginRequest } from '../auth/msalConfig'
 
 export function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -14,20 +15,32 @@ export function AcceptInvitePage() {
 
   useEffect(() => {
     if (!token) { setState('error'); setError('No invitation token provided.'); return }
-    acceptInvite(token)
-      .then((r: any) => {
+
+    ;(async () => {
+      try {
+        await msalInstance.initialize()
+        // Popup, not redirect — keeps the whole flow on this one page
+        // rather than navigating away and back, which would need extra
+        // handling to recover the invite token across the round trip.
+        const result = await msalInstance.loginPopup(loginRequest)
+        const idToken = result.idToken
+
+        const r = await ssoLogin(idToken, token)
         // This is the one moment this app's identity gets established on a
-        // device — everything after just relies on this being in
-        // localStorage already, the same way picking a name from the
-        // "Logged in as" dropdown always has.
-        setCurrentResource({ id: r.id, name: r.name, resource_type: r.resource_type, access_role: r.access_role })
-        setName(r.name)
+        // device — everything after relies on this session token being in
+        // localStorage already, sent on every request from here on.
+        setSessionToken(r.access_token)
+        setCurrentResource({
+          id: r.resource.id, name: r.resource.name,
+          resource_type: r.resource.resource_type, access_role: r.resource.access_role,
+        })
+        setName(r.resource.name)
         setState('success')
-      })
-      .catch((err: any) => {
+      } catch (err: any) {
         setState('error')
-        setError(err?.response?.data?.detail || 'This invitation link isn\u2019t valid.')
-      })
+        setError(err?.response?.data?.detail || err?.message || 'This invitation link isn\u2019t valid.')
+      }
+    })()
   }, [token])
 
   return (
@@ -38,7 +51,7 @@ export function AcceptInvitePage() {
         {state === 'loading' && (
           <div className="flex flex-col items-center gap-3 py-4">
             <Loader2 size={28} className="text-gray-300 animate-spin"/>
-            <p className="text-sm text-gray-500">Checking your invitation…</p>
+            <p className="text-sm text-gray-500">Sign in with your Microsoft account to continue…</p>
           </div>
         )}
 
@@ -62,11 +75,12 @@ export function AcceptInvitePage() {
           <div className="flex flex-col items-center gap-3 py-2">
             <XCircle size={32} className="text-red-400"/>
             <div>
-              <p className="text-base font-semibold text-gray-900">Invitation not found</p>
+              <p className="text-base font-semibold text-gray-900">Couldn't complete sign-in</p>
               <p className="text-xs text-gray-400 mt-1">{error}</p>
             </div>
             <p className="text-[11px] text-gray-400">
-              Ask whoever invited you to double-check the link, or send a new one.
+              Make sure you're signing in with the same email address this invitation was sent to,
+              or ask whoever invited you to double-check the link.
             </p>
           </div>
         )}

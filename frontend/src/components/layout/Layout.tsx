@@ -4,6 +4,7 @@ import { TrendingUp, FolderKanban, CheckCircle, BarChart3, Plug, Users, ShieldCh
 import clsx from 'clsx'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getClosedWon, getProjects, getResources, getCurrentResourceInfo, setCurrentResource, getSettings } from '../../api'
+import { signOut } from '../AuthGate'
 
 function playDing() {
   try {
@@ -50,11 +51,10 @@ function SidebarFooter() {
   // Keep the cached identity (localStorage, read by getCurrentResourceInfo
   // throughout the app for permission checks) in sync with the database.
   // Without this, changing someone's role/name in Resources has no effect
-  // for them until they happen to re-select themselves from this dropdown —
-  // setCurrentResource only ever gets called on an explicit selection, so a
-  // role change made while they were already selected would otherwise sit
-  // there silently stale, and Management-gated actions like Convert would
-  // keep looking unavailable even after the role change actually took effect.
+  // for them until their next full sign-in — a role change made while
+  // they're already signed in would otherwise sit there silently stale,
+  // and Management-gated actions like Convert would keep looking
+  // unavailable even after the role change actually took effect.
   useEffect(() => {
     if (!current) return
     const latest = (resources as any[]).find(r => r.id === current.id)
@@ -65,39 +65,15 @@ function SidebarFooter() {
     }
   }, [resources])
 
-  const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value
-    if (!id) {
-      setCurrentResource(null)
-      setCurrent(null)
-    } else {
-      const r = (resources as any[]).find(r => r.id === +id)
-      if (r) {
-        setCurrentResource({ id: r.id, name: r.name, resource_type: r.resource_type, access_role: r.access_role })
-        setCurrent({ id: r.id, name: r.name, resource_type: r.resource_type, access_role: r.access_role } as any)
-      }
-    }
-    // Every query depends on identity for visibility/edit rights — refetch everything
-    qc.invalidateQueries()
-  }
-
   return (
     <div className="px-4 py-3 border-t border-gray-100">
-      <p className="text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">Logged in as</p>
-      <select
-        value={current?.id ?? ''}
-        onChange={handleSelect}
-        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-gray-400">
-        <option value="">— Select your name —</option>
-        {(resources as any[]).map(r => (
-          <option key={r.id} value={r.id}>{r.name}{['Management', 'Admin'].includes(r.access_role) ? ` (${r.access_role})` : ''}</option>
-        ))}
-      </select>
+      <p className="text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider font-semibold">Signed in as</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-gray-800 truncate">{current?.name || '—'}</p>
+        <button onClick={signOut} className="text-[11px] text-gray-400 hover:text-gray-600 flex-shrink-0">Sign out</button>
+      </div>
       {['Management', 'Admin'].includes(current?.access_role ?? '') && (
         <p className="text-[10px] text-violet-500 mt-1">✦ {current?.access_role} — full access to all projects</p>
-      )}
-      {!current && (
-        <p className="text-[10px] text-amber-500 mt-1">⚠ Select who you are to see your projects</p>
       )}
     </div>
   )
