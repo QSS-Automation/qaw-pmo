@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, GitCompare, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { AlertTriangle, GitCompare, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBudgetSummary, getBudgetCompare } from '../api'
 import { useMyPermissions } from '../hooks/useMyPermissions'
 import { PageHeader } from '../components/layout/Layout'
@@ -19,14 +19,12 @@ export default function BudgetPage() {
   const { canView } = useMyPermissions()
   const { data, isLoading } = useQuery({ queryKey: ['budget'], queryFn: getBudgetSummary })
 
-  const [showCompare, setShowCompare] = useState(false)
   const [month1, setMonth1] = useState({ year: thisYear(), month: thisMonth() > 1 ? thisMonth() - 1 : 12 })
   const [month2, setMonth2] = useState({ year: thisYear(), month: thisMonth() })
   const [expandedProject, setExpandedProject] = useState<number | null>(null)
   const { data: compareData, isLoading: compareLoading } = useQuery({
     queryKey: ['budget-compare', month1.year, month1.month, month2.year, month2.month],
     queryFn:  () => getBudgetCompare(month1.year, month1.month, month2.year, month2.month),
-    enabled:  showCompare,
   })
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><Spinner size={28}/></div>
@@ -49,12 +47,6 @@ export default function BudgetPage() {
         title="Budget Utilization"
         desc="Budget vs actual cost — active projects"
         tag={`${data.projects.length} projects`}
-        actions={
-          <button onClick={() => setShowCompare(s => !s)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${showCompare ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-            <GitCompare size={13}/> Compare months
-          </button>
-        }
       />
 
       {/* Sticky metrics */}
@@ -76,11 +68,10 @@ export default function BudgetPage() {
 
       <div className="p-6">
 
-        {showCompare && (
-          <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-5">
-            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden mb-5">
+            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+              <GitCompare size={13} className="text-gray-400"/>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Compare two months — all projects</p>
-              <button onClick={() => setShowCompare(false)} className="text-gray-400 hover:text-gray-600"><X size={14}/></button>
             </div>
             <div className="p-4 space-y-4">
               <div className="flex items-center gap-3 flex-wrap">
@@ -191,8 +182,7 @@ export default function BudgetPage() {
                 </Table>
               ) : null}
             </div>
-          </div>
-        )}
+        </div>
 
         {overBudget.length > 0 && (
           <Callout type="error">
