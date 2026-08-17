@@ -49,18 +49,16 @@ export interface Project {
   contract_value_myr: number
   revenue_deduction: number
   net_revenue: number
-  budget: number
+  project_budget: number
   budget_utilized: number
   util_pct: number
   gp_margin_target: number
   gp_margin_forecast: number | null
   planned_progress: number
   actual_progress: number
-  billed_pct: number
   start_date: string | null
   original_end_date: string | null
   rebased_end_date: string | null
-  project_manager: string | null
   account_manager: string | null
   salesforce_deal_id: string | null
   health_remarks: string | null
@@ -142,13 +140,12 @@ export interface BudgetRow {
   short_name: string
   contract_value_myr: number
   net_revenue: number
-  budget: number
+  project_budget: number
   budget_utilized: number
   util_pct: number
   planned_progress: number
   actual_progress: number
   billed_amount: number
-  billed_pct: number
   headcount: number
   hc_cost: number
   rag: RAGStatus | null
