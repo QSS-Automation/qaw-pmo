@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Save, Send, AlertCircle, Check, Globe, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
-  getProjects, completeProject, updateProject, getBudgetSummary,
+  getProjects, completeProject, updateProject, reactivateProject, getBudgetSummary,
   getPmoPlan, getPmoActual, getPmoHistory, getPmoSubmittedMonths,
   submitPlan, pushActual, getActualDraft, saveActualDraft, getPlanDraft, savePlanDraft, getResources, getRemainingCapacity, getCurrentResourceInfo, getMyScheduleAccess, getGanttProgressSummary, getPmoMyAccess,
 } from '../api'
@@ -1300,6 +1300,11 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
     onSuccess: () => { toast.success('Moved to Completed'); qc.invalidateQueries({ queryKey: ['projects'] }) },
     onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to complete project'),
   })
+  const reactivateMut = useMutation({
+    mutationFn: () => reactivateProject(project.id),
+    onSuccess: () => { toast.success('Moved back to In Progress'); qc.invalidateQueries({ queryKey: ['projects'] }) },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to reactivate project'),
+  })
 
   const [editingRebase, setEditingRebase] = useState(false)
   const [rebaseDraft, setRebaseDraft]     = useState(project.rebased_end_date || '')
@@ -1359,6 +1364,12 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
         <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" to Completed?')) completeMut.mutate() }}
           className="flex-shrink-0 text-xs px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
           ✓ Complete
+        </button>
+      )}
+      {isCompleted && isManagement && (
+        <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" back to In Progress?')) reactivateMut.mutate() }}
+          className="flex-shrink-0 text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+          ↺ Reactivate
         </button>
       )}
     </div>
@@ -1453,6 +1464,11 @@ function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
     onSuccess: () => { toast.success('Moved to Completed'); qc.invalidateQueries({ queryKey: ['projects'] }) },
     onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to complete project'),
   })
+  const reactivateMut = useMutation({
+    mutationFn: () => reactivateProject(project.id),
+    onSuccess: () => { toast.success('Moved back to In Progress'); qc.invalidateQueries({ queryKey: ['projects'] }) },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to reactivate project'),
+  })
 
   const utilPct   = budgetRow ? (budgetRow.util_pct || 0) * 100 : 0
   const utilized  = budgetRow?.budget_utilized ?? 0
@@ -1483,6 +1499,12 @@ function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
             <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" to Completed?')) completeMut.mutate() }}
               className="flex-shrink-0 text-xs px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
               ✓ Complete
+            </button>
+          )}
+          {isCompleted && isManagement && (
+            <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" back to In Progress?')) reactivateMut.mutate() }}
+              className="flex-shrink-0 text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+              ↺ Reactivate
             </button>
           )}
         </div>
