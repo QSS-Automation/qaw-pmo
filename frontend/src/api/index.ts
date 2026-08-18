@@ -137,8 +137,10 @@ export const getBudgetCompare = (year1: number, month1: number, year2: number, m
 export const syncSalesforce = () =>
   api.post('/integrations/salesforce/sync').then(r => r.data)
 
-export const getIntegrationStatus = () =>
-  api.get('/integrations/status').then(r => r.data)
+// getIntegrationStatus removed — the Integrations page no longer displays
+// mock/live status inline (replaced by a setup-steps guide); the backend
+// endpoint (/integrations/status) is untouched and still directly callable
+// for diagnostics, just no longer has a frontend caller.
 export const testCrmConnection = () =>
   api.get('/integrations/crm/test').then(r => r.data)
 export const testPmoConnection = () =>
