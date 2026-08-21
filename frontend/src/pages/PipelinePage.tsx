@@ -133,10 +133,13 @@ function ConvertModal({ deal, resources, onClose }: { deal: Deal; resources: Res
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!deal.project_code) throw new Error('Deal has no project code — cannot convert')
+      // sf_opportunity_id, not project_code — multiple genuinely different
+      // deals can legitimately share one project_code, so using it here
+      // risked converting the wrong deal's data if two shared a code.
+      if (!deal.sf_opportunity_id) throw new Error('Deal has no Salesforce ID — cannot convert')
       const err = validate()
       if (err) throw new Error(err)
-      return await convertDeal(deal.project_code, { ...form, allocations, misc_costs: miscCosts })
+      return await convertDeal(deal.sf_opportunity_id, { ...form, allocations, misc_costs: miscCosts })
     },
     onSuccess: () => {
       toast.success('Project created successfully!')
@@ -395,7 +398,7 @@ export default function PipelinePage() {
             </div>
             <div className="space-y-3">
               {closedWon!.map(d => (
-                <div key={d.project_code || d.name} className="bg-white border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
+                <div key={d.sf_opportunity_id || d.project_code || d.name} className="bg-white border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-semibold text-sm">{d.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -452,7 +455,7 @@ export default function PipelinePage() {
             </thead>
             <tbody>
               {deals?.map(deal => (
-                <tr key={deal.project_code || deal.name}
+                <tr key={deal.sf_opportunity_id || deal.project_code || deal.name}
                   className={`hover:bg-gray-50/60 ${deal.is_converted ? 'opacity-50' : ''}`}>
                   <Td>
                     <div>
