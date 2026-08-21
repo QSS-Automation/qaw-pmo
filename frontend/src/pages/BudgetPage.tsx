@@ -19,7 +19,11 @@ export default function BudgetPage() {
   const { canView } = useMyPermissions()
   const { data, isLoading } = useQuery({ queryKey: ['budget'], queryFn: getBudgetSummary })
 
-  const [month1, setMonth1] = useState({ year: thisYear(), month: thisMonth() > 1 ? thisMonth() - 1 : 12 })
+  const [month1, setMonth1] = useState(
+    thisMonth() > 1
+      ? { year: thisYear(),     month: thisMonth() - 1 }
+      : { year: thisYear() - 1, month: 12 }   // January → last December was actually LAST year, not this one
+  )
   const [month2, setMonth2] = useState({ year: thisYear(), month: thisMonth() })
   const [expandedProject, setExpandedProject] = useState<number | null>(null)
   const { data: compareData, isLoading: compareLoading } = useQuery({
