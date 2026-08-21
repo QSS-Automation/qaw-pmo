@@ -54,7 +54,18 @@ function ResourceModal({ resource, onClose }: { resource?: Resource; onClose: ()
     <Modal open onClose={onClose} title={isEdit ? `Edit — ${resource!.name}` : 'Add Resource'} wide>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Name (short/display)" required><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/></Field>
+          <Field label="Name (short/display)" required>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/>
+            {isEdit && form.name !== resource!.name && form.name.trim() !== '' && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                ⚠ Changing this breaks the match against every existing Plan/Actual
+                submission for {resource!.name} — their allocation history and permissions
+                are matched by this exact name. Consider adding a new resource instead if
+                this is a genuinely different person, or check with whoever maintains
+                Plan/Actual data before renaming an existing one.
+              </p>
+            )}
+          </Field>
           <Field label="Full name">
             <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
               placeholder="For SSO matching later"/>
