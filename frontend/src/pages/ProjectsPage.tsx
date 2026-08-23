@@ -816,7 +816,6 @@ function ActualSection({ project }: { project: Project }) {
   const now = { year: thisYear(), month: thisMonth() }
   const [tab,   setTab]   = useState<'resource'|'progress'>('resource')
   const [month, setMonth] = useState(now)
-  const [rag,   setRag]   = useState<string>((project as any).rag?.toLowerCase() || 'green')
 
   const { data: allResources = [] } = useQuery({
     queryKey: ['resources'],
@@ -953,8 +952,7 @@ function ActualSection({ project }: { project: Project }) {
   )
   const hasUnsavedChanges = hasDraft && (
     normResources(resources) !== normResources(serverDraft.resources) ||
-    normMiscCosts(miscCosts) !== normMiscCosts(serverDraft.misc_costs) ||
-    rag !== serverDraft.rag
+    normMiscCosts(miscCosts) !== normMiscCosts(serverDraft.misc_costs)
   )
 
   // Load draft into the editable state when it arrives (only for current month).
@@ -969,7 +967,6 @@ function ActualSection({ project }: { project: Project }) {
     if (serverDraft.resources?.length > 0 || serverDraft.misc_costs?.length > 0) {
       setResources(serverDraft.resources || [])
       setMiscCosts(serverDraft.misc_costs || [])
-      if (serverDraft.rag) setRag(serverDraft.rag)
     }
     draftHydratedKeyRef.current = hydrationKey
   }, [serverDraft, isCurrentMonth, pc, month.year, month.month])
@@ -977,7 +974,11 @@ function ActualSection({ project }: { project: Project }) {
   const [justSaved, setJustSaved] = useState(false)
   const saveDraftMut = useMutation({
     mutationFn: () => saveActualDraft(pc, {
-      project: projBase, resources, misc_costs: miscCosts, rag_status: rag, year: month.year, month: month.month,
+      // rag_status is a snapshot of the project's actual, current RAG (now
+      // edited directly on the project header, not here) — sent so raw_pmo's
+      // own actual_project record doesn't go stale for anything external
+      // that reads it, not because this section lets anyone change it.
+      project: projBase, resources, misc_costs: miscCosts, rag_status: (project as any).rag, year: month.year, month: month.month,
     }),
     onSuccess: () => {
       toast.success('Draft saved')
@@ -1010,7 +1011,7 @@ function ActualSection({ project }: { project: Project }) {
 
       return await pushActual(pc, {
         project: projBase, resources, misc_costs: miscCosts,
-        rag_status: rag, year: month.year, month: month.month,
+        rag_status: (project as any).rag, year: month.year, month: month.month,
       })
     },
     onSuccess: () => {
@@ -1111,23 +1112,6 @@ function ActualSection({ project }: { project: Project }) {
           </button>
         ))}
         <div className="flex-1"/>
-        {editable && (
-          <div className="flex items-center gap-1.5 pb-1">
-            <span className="text-[11px] text-gray-400">RAG:</span>
-            {(['red','amber','green'] as const).map(r => (
-              <button key={r} onClick={() => setRag(r)}
-                title={r.charAt(0).toUpperCase() + r.slice(1)}
-                className={`w-5 h-5 rounded-full border-2 transition-all ${rag===r?'border-gray-800 scale-110':'border-transparent opacity-50'} ${r==='red'?'bg-red-500':r==='amber'?'bg-amber-400':'bg-emerald-500'}`}/>
-            ))}
-            <span className="text-[11px] font-medium capitalize text-gray-600">{rag}</span>
-          </div>
-        )}
-        {!editable && rag && (
-          <div className="flex items-center gap-1.5 pb-1">
-            <span className={`w-3 h-3 rounded-full ${rag==='red'?'bg-red-500':rag==='amber'?'bg-amber-400':'bg-emerald-500'}`}/>
-            <span className="text-[11px] capitalize text-gray-500">{rag}</span>
-          </div>
-        )}
       </div>
 
       {tab === 'resource' && (
@@ -1314,6 +1298,17 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
     onError:   (err: any) => toast.error(err?.response?.data?.detail || 'Failed to update'),
   })
 
+  // RAG lives directly on the project now, editable any time — no longer
+  // tied to the Actual tab's monthly save/submit cycle at all, and no
+  // longer overridden by whatever raw_pmo last had on file for it either
+  // (see budget_summary on the backend, which used to do exactly that).
+  const [editingRag, setEditingRag] = useState(false)
+  const ragMut = useMutation({
+    mutationFn: (v: string) => updateProject(project.id, { rag: v }),
+    onSuccess: () => { toast.success('RAG status updated'); qc.invalidateQueries({ queryKey: ['projects'] }); setEditingRag(false) },
+    onError:   (err: any) => toast.error(err?.response?.data?.detail || 'Failed to update'),
+  })
+
   return (
     <div
       className={`flex items-center gap-3 px-4 py-3 select-none ${clickable ? 'cursor-pointer hover:bg-gray-50/60 transition-colors' : ''}`}
@@ -1356,9 +1351,30 @@ function ProjectSummaryBar({ project, isCompleted, clickable = false, onClick, s
               </span>
             )
           )}
+          {!clickable && (
+            editingRag ? (
+              <span className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1" onClick={e => e.stopPropagation()}>
+                {(['Red', 'Amber', 'Green'] as const).map(r => (
+                  <button key={r} onClick={() => ragMut.mutate(r)} disabled={ragMut.isPending}
+                    title={r} className={`w-5 h-5 rounded-full border-2 transition-all ${project.rag === r ? 'border-gray-800 scale-110' : 'border-transparent opacity-50 hover:opacity-80'} ${r === 'Red' ? 'bg-red-500' : r === 'Amber' ? 'bg-amber-400' : 'bg-emerald-500'}`}/>
+                ))}
+                <button onClick={() => setEditingRag(false)} className="text-gray-400 hover:text-gray-600 px-1 text-[11px]">Done</button>
+              </span>
+            ) : (
+              <span
+                onClick={e => { e.stopPropagation(); setEditingRag(true) }}
+                className="flex items-center gap-1.5 cursor-pointer rounded-lg px-2 py-1 font-semibold bg-gray-50 hover:bg-gray-100 transition-colors"
+                title="Click to change RAG status">
+                <span className={`w-2.5 h-2.5 rounded-full ${project.rag==='Red'?'bg-red-500':project.rag==='Amber'?'bg-amber-400':'bg-emerald-500'}`}/>
+                {project.rag || 'Green'}
+              </span>
+            )
+          )}
         </span>
         <span className="font-semibold font-mono">{fmtMYR(project.contract_value_myr)}</span>
-        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${project.rag==='Red'?'bg-red-500':project.rag==='Amber'?'bg-amber-400':'bg-emerald-500'}`}/>
+        {clickable && (
+          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${project.rag==='Red'?'bg-red-500':project.rag==='Amber'?'bg-amber-400':'bg-emerald-500'}`}/>
+        )}
       </div>
       {!isCompleted && isManagement && (wbsProgress?.actual_progress ?? 0) >= 100 && (
         <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" to Completed?')) completeMut.mutate() }}
