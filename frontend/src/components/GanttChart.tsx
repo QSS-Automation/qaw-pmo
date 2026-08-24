@@ -48,70 +48,79 @@ function WbsDashboard({ projectId }: { projectId: number }) {
 
   return (
     <div className="space-y-4">
-      {/* Overall project header */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-100 rounded-xl p-4">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Planned Progress</p>
-          <p className="text-xl font-bold text-blue-600">{fmtPct(proj.planned_pct)}</p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-4">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Actual Progress</p>
-          <p className="text-xl font-bold text-emerald-600">{fmtPct(proj.actual_pct)}</p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-4">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Delta</p>
-          <p className={`text-xl font-bold ${delta < -5 ? 'text-red-600' : delta < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
-          </p>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-xl p-4">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Timeline</p>
-          <p className="text-xs font-semibold text-gray-700">{fmtDate(proj.planned_start)} → {fmtDate(proj.planned_end)}</p>
-        </div>
-      </div>
+      {/* Overall project header — accordion-wrapped, defaulted open */}
+      <Accordion type="multiple" defaultValue={['header']} className="bg-white border border-gray-100 rounded-xl px-4">
+        <AccordionItem value="header" className="border-b-0">
+          <AccordionTrigger className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest hover:no-underline py-3">
+            Project summary
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Planned Progress</p>
+                <p className="text-xl font-bold text-blue-600">{fmtPct(proj.planned_pct)}</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Actual Progress</p>
+                <p className="text-xl font-bold text-emerald-600">{fmtPct(proj.actual_pct)}</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Delta</p>
+                <p className={`text-xl font-bold ${delta < -5 ? 'text-red-600' : delta < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+                </p>
+              </div>
+              <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Timeline</p>
+                <p className="text-xs font-semibold text-gray-700">{fmtDate(proj.planned_start)} → {fmtDate(proj.planned_end)}</p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
-      {/* Category -> Activity table */}
+      {/* Category → Activity — a real hierarchy, so each category is an
+          accordion item with its own summary as the trigger, and its
+          activities (the same metrics one level down) as the content. */}
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left py-2 px-3 text-gray-400 font-semibold">Category / Activity</th>
-              <th className="text-left py-2 px-3 text-gray-400 font-semibold">Start</th>
-              <th className="text-left py-2 px-3 text-gray-400 font-semibold">End</th>
-              <th className="text-right py-2 px-3 text-gray-400 font-semibold">Planned %</th>
-              <th className="text-right py-2 px-3 text-gray-400 font-semibold">Actual %</th>
-              <th className="text-right py-2 px-3 text-gray-400 font-semibold">Delta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rollup.categories.map((cat: any) => (
-              <>
-                <tr key={cat.category} className="bg-gray-50/60 border-b border-gray-100">
-                  <td className="py-2 px-3 font-semibold text-gray-800">{cat.category}</td>
-                  <td className="py-2 px-3 text-gray-500">{fmtDate(cat.planned_start)}</td>
-                  <td className="py-2 px-3 text-gray-500">{fmtDate(cat.planned_end)}</td>
-                  <td className="py-2 px-3 text-right font-mono text-blue-600">{fmtPct(cat.planned_pct)}</td>
-                  <td className="py-2 px-3 text-right font-mono text-emerald-600">{fmtPct(cat.actual_pct)}</td>
-                  <td className={`py-2 px-3 text-right font-mono ${cat.actual_pct - cat.planned_pct < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+        <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr] gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+          <span>Category</span><span>Start</span><span>End</span>
+          <span className="text-right">Planned %</span><span className="text-right">Actual %</span><span className="text-right">Delta</span>
+        </div>
+        <Accordion type="multiple" defaultValue={rollup.categories.map((c: any) => c.category)} className="divide-y divide-gray-50">
+          {rollup.categories.map((cat: any) => (
+            <AccordionItem key={cat.category} value={cat.category} className="border-b-0 px-4">
+              <AccordionTrigger className="py-2 text-xs hover:no-underline">
+                <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr] gap-3 w-full items-center pr-2 text-left">
+                  <span className="font-semibold text-gray-800">{cat.category}</span>
+                  <span className="text-gray-500">{fmtDate(cat.planned_start)}</span>
+                  <span className="text-gray-500">{fmtDate(cat.planned_end)}</span>
+                  <span className="text-right font-mono text-blue-600">{fmtPct(cat.planned_pct)}</span>
+                  <span className="text-right font-mono text-emerald-600">{fmtPct(cat.actual_pct)}</span>
+                  <span className={`text-right font-mono ${cat.actual_pct - cat.planned_pct < 0 ? 'text-red-500' : 'text-gray-400'}`}>
                     {(cat.actual_pct - cat.planned_pct).toFixed(1)}%
-                  </td>
-                </tr>
-                {cat.activities.map((act: any) => (
-                  <tr key={`${cat.category}-${act.activity}`} className="border-b border-gray-50 hover:bg-gray-50/40">
-                    <td className="py-1.5 px-3 pl-8 text-gray-600">{act.activity}</td>
-                    <td className="py-1.5 px-3 text-gray-400">{fmtDate(act.planned_start)}</td>
-                    <td className="py-1.5 px-3 text-gray-400">{fmtDate(act.planned_end)}</td>
-                    <td className="py-1.5 px-3 text-right font-mono text-gray-500">{fmtPct(act.planned_pct)}</td>
-                    <td className="py-1.5 px-3 text-right font-mono text-gray-600">{fmtPct(act.actual_pct)}</td>
-                    <td className={`py-1.5 px-3 text-right font-mono ${act.actual_pct - act.planned_pct < 0 ? 'text-red-400' : 'text-gray-300'}`}>
-                      {(act.actual_pct - act.planned_pct).toFixed(1)}%
-                    </td>
-                  </tr>
-                ))}
-              </>
-            ))}
-          </tbody>
-        </table>
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="divide-y divide-gray-50 -mx-4">
+                  {cat.activities.map((act: any) => (
+                    <div key={act.activity} className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr] gap-3 px-4 py-1.5 pl-8 hover:bg-gray-50/40">
+                      <span className="text-gray-600">{act.activity}</span>
+                      <span className="text-gray-400">{fmtDate(act.planned_start)}</span>
+                      <span className="text-gray-400">{fmtDate(act.planned_end)}</span>
+                      <span className="text-right font-mono text-gray-500">{fmtPct(act.planned_pct)}</span>
+                      <span className="text-right font-mono text-gray-600">{fmtPct(act.actual_pct)}</span>
+                      <span className={`text-right font-mono ${act.actual_pct - act.planned_pct < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                        {(act.actual_pct - act.planned_pct).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
     </div>
   )
@@ -925,29 +934,35 @@ function PendingApprovalsPanel({ projectId, onClose }: { projectId: number; onCl
       ) : pending.length === 0 ? (
         <p className="text-xs text-amber-600 text-center py-3">No pending requests</p>
       ) : (
-        <div className="space-y-2">
+        <Accordion type="multiple" defaultValue={pending.map((p: any) => String(p.id))} className="space-y-2">
           {pending.map((p: any) => (
-            <div key={p.id} className="bg-white border border-amber-100 rounded-lg p-3 text-xs space-y-2">
-              <div>
-                <p className="font-semibold text-gray-800">{p.task_name}</p>
-                <p className="text-[11px] text-gray-400">{p.category} / {p.activity} · requested by {p.requested_by_name}</p>
-              </div>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-gray-400 line-through">{fmtDate(p.previous_planned_start)} → {fmtDate(p.previous_planned_end)}</span>
-                <span className="text-gray-400">→</span>
-                <span className="text-emerald-700 font-semibold">{fmtDate(p.requested_planned_start)} → {fmtDate(p.requested_planned_end)}</span>
-              </div>
-              <Input placeholder="Optional note…" value={noteById[p.id] || ''}
-                onChange={e => setNoteById(n => ({ ...n, [p.id]: e.target.value }))}/>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => rejectMut.mutate(p.id)} disabled={rejectMut.isPending || approveMut.isPending}
-                  className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50">Reject</button>
-                <button onClick={() => approveMut.mutate(p.id)} disabled={rejectMut.isPending || approveMut.isPending}
-                  className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-              </div>
-            </div>
+            <AccordionItem key={p.id} value={String(p.id)} className="bg-white border border-amber-100 rounded-lg px-3">
+              <AccordionTrigger className="py-2.5 text-xs hover:no-underline">
+                <div className="text-left flex-1">
+                  <p className="font-semibold text-gray-800">{p.task_name}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{p.category} / {p.activity} · requested by {p.requested_by_name}</p>
+                  <div className="flex items-center gap-2 text-[11px] mt-1">
+                    <span className="text-gray-400 line-through">{fmtDate(p.previous_planned_start)} → {fmtDate(p.previous_planned_end)}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="text-emerald-700 font-semibold">{fmtDate(p.requested_planned_start)} → {fmtDate(p.requested_planned_end)}</span>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2">
+                  <Input placeholder="Optional note…" value={noteById[p.id] || ''}
+                    onChange={e => setNoteById(n => ({ ...n, [p.id]: e.target.value }))}/>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => rejectMut.mutate(p.id)} disabled={rejectMut.isPending || approveMut.isPending}
+                      className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50">Reject</button>
+                    <button onClick={() => approveMut.mutate(p.id)} disabled={rejectMut.isPending || approveMut.isPending}
+                      className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       )}
     </div>
   )
