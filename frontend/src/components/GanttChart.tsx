@@ -463,20 +463,26 @@ function TaskHistoryPanel({ taskId, onClose }: { taskId: number; onClose: () => 
       {entries.length === 0 ? (
         <p className="text-xs text-gray-400 text-center py-6">No history yet</p>
       ) : (
-        <div className="space-y-2 max-h-72 overflow-y-auto">
+        <Accordion type="multiple" className="max-h-72 overflow-y-auto">
           {entries.map((e, i) => (
-            <div key={i} className="flex gap-2 text-xs">
-              <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${e.kind === 'progress' ? 'bg-emerald-500' : 'bg-blue-500'}`}/>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700 font-medium">{e.text}</span>
-                  <span className="text-gray-400">{fmtDate(e.date)}</span>
+            <AccordionItem key={i} value={String(i)} className="border-b-0" disabled={!e.sub}>
+              <AccordionTrigger className={`py-1.5 text-xs hover:no-underline ${!e.sub ? '[&>svg]:opacity-0 cursor-default' : ''}`}>
+                <div className="flex gap-2 flex-1 text-left pr-2">
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${e.kind === 'progress' ? 'bg-emerald-500' : 'bg-blue-500'}`}/>
+                  <div className="flex-1 flex items-center justify-between">
+                    <span className="text-gray-700 font-medium">{e.text}</span>
+                    <span className="text-gray-400 flex-shrink-0 ml-2">{fmtDate(e.date)}</span>
+                  </div>
                 </div>
-                {e.sub && <p className="text-gray-400 mt-0.5">{e.sub}</p>}
-              </div>
-            </div>
+              </AccordionTrigger>
+              {e.sub && (
+                <AccordionContent>
+                  <p className="text-gray-400 pl-3.5">{e.sub}</p>
+                </AccordionContent>
+              )}
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       )}
     </div>
   )
@@ -524,30 +530,34 @@ function ProgressUpdatePanel({ tasks, projectId, statuses, canEdit }: { tasks: a
     <div className="grid grid-cols-2 gap-4">
       <div className="bg-white border border-gray-100 rounded-xl p-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">Select sub-activity</p>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <Accordion type="multiple" defaultValue={Object.keys(grouped)} className="max-h-96 overflow-y-auto">
           {Object.entries(grouped).map(([cat, activities]) => (
-            <div key={cat}>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase px-1 mb-1">{cat}</p>
-              {Object.entries(activities).map(([act, subs]) => (
-                <div key={act} className="mb-1.5">
-                  <p className="text-[10px] text-gray-400 px-1">{act}</p>
-                  {subs.map(t => (
-                    <div key={t.id} onClick={() => { setSelectedTaskId(t.id); setNewStatus(''); setDescription(''); setShowHistory(false) }}
-                      className={`px-3 py-1.5 rounded-lg cursor-pointer border ${selectedTaskId === t.id ? 'border-gray-800 bg-gray-50' : 'border-transparent hover:bg-gray-50'}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-700 truncate">{t.task_name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">{t.percent_complete}%</span>
+            <AccordionItem key={cat} value={cat} className="border-b-0">
+              <AccordionTrigger className="py-1.5 px-1 text-[10px] font-semibold text-gray-400 uppercase hover:no-underline">
+                {cat}
+              </AccordionTrigger>
+              <AccordionContent>
+                {Object.entries(activities).map(([act, subs]) => (
+                  <div key={act} className="mb-1.5">
+                    <p className="text-[10px] text-gray-400 px-1">{act}</p>
+                    {subs.map(t => (
+                      <div key={t.id} onClick={() => { setSelectedTaskId(t.id); setNewStatus(''); setDescription(''); setShowHistory(false) }}
+                        className={`px-3 py-1.5 rounded-lg cursor-pointer border ${selectedTaskId === t.id ? 'border-gray-800 bg-gray-50' : 'border-transparent hover:bg-gray-50'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-gray-700 truncate">{t.task_name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">{t.percent_complete}%</span>
+                        </div>
+                        <div className="h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                          <div className={`h-full ${statusColor(t.percent_complete).bar}`} style={{ width: `${t.percent_complete}%` }}/>
+                        </div>
                       </div>
-                      <div className="h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                        <div className={`h-full ${statusColor(t.percent_complete).bar}`} style={{ width: `${t.percent_complete}%` }}/>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+                    ))}
+                  </div>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       </div>
 
       {selected && (
@@ -618,20 +628,24 @@ function SCurveChart({ projectId }: { projectId: number }) {
   const chartData = months.map((m: string, i: number) => ({ month: m, Planned: data.planned[i], Actual: data.actual[i] }))
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4">
-      <p className="text-sm font-semibold text-gray-800 mb-4">S-curve — planned vs actual</p>
-      <ResponsiveContainer width="100%" height={340}>
-        <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1"/>
-          <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }}/>
-          <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} domain={[0, 100]} tickFormatter={(v: any) => `${v}%`}/>
-          <Tooltip formatter={(v: any) => `${v}%`}/>
-          <Legend wrapperStyle={{ fontSize: 12 }}/>
-          <Line type="monotone" dataKey="Planned" stroke="#2563eb" strokeWidth={2} dot={false}/>
-          <Line type="monotone" dataKey="Actual"  stroke="#059669" strokeWidth={2} dot={false}/>
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <Accordion type="multiple" defaultValue={['scurve']} className="bg-white border border-gray-100 rounded-xl px-4">
+      <AccordionItem value="scurve" className="border-b-0">
+        <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">S-curve — planned vs actual</AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <ResponsiveContainer width="100%" height={340}>
+            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1"/>
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }}/>
+              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} domain={[0, 100]} tickFormatter={(v: any) => `${v}%`}/>
+              <Tooltip formatter={(v: any) => `${v}%`}/>
+              <Legend wrapperStyle={{ fontSize: 12 }}/>
+              <Line type="monotone" dataKey="Planned" stroke="#2563eb" strokeWidth={2} dot={false}/>
+              <Line type="monotone" dataKey="Actual"  stroke="#059669" strokeWidth={2} dot={false}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   )
 }
 
