@@ -386,6 +386,36 @@ export function IntegrationsPage() {
                     cause: 'The version of the code actually running on the server predates that feature.',
                     fix: 'Redeploy the latest backend code and restart the service — this is a deployment gap, not a bug in the feature itself.',
                   },
+                  {
+                    symptom: 'systemctl shows the backend as "active (running)", but every request just hangs — the app never actually finishes loading',
+                    cause: 'The process is stuck partway through startup, most often waiting on a database connection that never responds (e.g. the MySQL server itself is temporarily unresponsive) — "active (running)" only means the process hasn\u2019t crashed, not that it finished booting.',
+                    fix: 'Check the logs for the line "Application startup complete." If it\u2019s missing, the process is genuinely stuck, not just slow. A tool like py-spy (pip install py-spy) can dump the exact line of code it\u2019s frozen on for a definitive answer.',
+                  },
+                  {
+                    symptom: 'One specific endpoint returns 500 while everything else works fine — especially right after adding a new permission check or helper function',
+                    cause: 'The function is used correctly, but was never actually imported into that particular file\u2019s own import list — easy to miss if the same function already works elsewhere in the codebase, since seeing it "already in use" doesn\u2019t confirm it\u2019s available in every file that calls it.',
+                    fix: 'Check the backend logs for the actual Python traceback (a NameError, not just "500 Internal Server Error") to see exactly which name is unresolved, then add it to that file\u2019s import line.',
+                  },
+                  {
+                    symptom: 'The same deal appears twice in Upcoming Projects, or shows as still needing conversion even though it was already converted',
+                    cause: 'A leftover row from before the salesforce_id column existed on curated_deals. Adding a column via ALTER TABLE never backfills a value for rows that already existed — they were left with salesforce_id = NULL, which the ETL\u2019s upsert can never match against a real ID, so it silently created a second, correct row alongside the old one instead of updating it.',
+                    fix: 'One-time cleanup: delete rows where salesforce_id IS NULL and another row with the same deal_name has a populated salesforce_id. Always review what would be deleted before running it, and check for any row where the old and new copies disagree on is_converted first — that combination means a deal was already turned into a project and needs that status carried over before the old row is removed.',
+                  },
+                  {
+                    symptom: 'MySQL error: "You can\u2019t specify target table \u2018x\u2019 for update in FROM clause"',
+                    cause: 'MySQL won\u2019t let a DELETE or UPDATE modify a table while a subquery in the very same statement also selects from that exact table — even with a different alias.',
+                    fix: 'Rewrite the subquery as a JOIN against a derived table (a SELECT wrapped in its own subquery) instead of an EXISTS or IN clause — MySQL treats a materialized derived table as separate from the table being modified, even though the underlying data is the same.',
+                  },
+                  {
+                    symptom: 'A fix that was just deployed and verified in the database doesn\u2019t seem to be showing up in the app',
+                    cause: 'Often not the fix itself — a browser tab left open from before the change was made can keep showing cached data indefinitely until it actually re-fetches.',
+                    fix: 'Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) before concluding the fix didn\u2019t work. If it still looks wrong after that, then look further.',
+                  },
+                  {
+                    symptom: 'Two entries in Upcoming Projects look like the same deal (identical or near-identical name) but have different Salesforce IDs and different amounts',
+                    cause: 'deal_name isn\u2019t guaranteed unique in Salesforce, the same way project_code isn\u2019t either — two genuinely separate Opportunities can legitimately be given the exact same name (e.g. two different clients both named a project the same generic thing).',
+                    fix: 'Not a bug — check the Salesforce ID or account name to confirm whether they\u2019re really the same deal or just a naming coincidence, before merging or converting either one.',
+                  },
                 ].map(({ symptom, cause, fix }) => (
                   <AccordionItem key={symptom} value={symptom} className="border-b-0">
                     <AccordionTrigger className="py-3 text-sm font-medium text-gray-800 hover:no-underline text-left">
