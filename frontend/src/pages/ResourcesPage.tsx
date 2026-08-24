@@ -5,7 +5,8 @@ import toast from 'react-hot-toast'
 import { getResources, createResource, updateResource, deleteResource } from '../api'
 import { useMyPermissions } from '../hooks/useMyPermissions'
 import { PageHeader } from '../components/layout/Layout'
-import { MetricCard, Spinner, Modal, Field, Input, Select, Table, Th, Td } from '../components/ui'
+import { MetricCard, Spinner, Modal, Field, Input, Select } from '../components/ui'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion'
 import { fmtMYR, projColor } from '../utils'
 import type { Resource } from '../types'
 
@@ -151,16 +152,27 @@ export default function ResourcesPage() {
         }
       />
 
-      {/* Sticky metrics */}
+      {/* Sticky metrics — accordion-wrapped but defaulted open. These are
+          glance-once KPIs someone checks while scrolling the whole roster,
+          so this is about giving the option to collapse it, not hiding it. */}
       {canView('resources.summary') && (
-      <div className="sticky top-14 z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)] px-6 py-4">
-        <div className="grid grid-cols-4 gap-3">
-          <MetricCard label="Total headcount" value={totalHC} sub={`${activeCount} active`}/>
-          <MetricCard label="Monthly HC cost" value={fmtMYR(totalCost)} sub="total payroll" valueClass="text-red-600"/>
-          <MetricCard label="Active" value={activeCount} valueClass="text-emerald-700"/>
-          <MetricCard label="Over-allocated" value={overAlloc} sub={overAlloc > 0 ? 'action needed' : 'all within 100%'}
-            valueClass={overAlloc > 0 ? 'text-red-600' : 'text-emerald-700'}/>
-        </div>
+      <div className="sticky top-14 z-20 bg-white border-b border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)] px-6">
+        <Accordion type="multiple" defaultValue={['metrics']}>
+          <AccordionItem value="metrics" className="border-b-0">
+            <AccordionTrigger className="text-xs font-semibold text-gray-500 uppercase tracking-wider hover:no-underline py-2.5">
+              Summary metrics
+            </AccordionTrigger>
+            <AccordionContent className="pb-4">
+              <div className="grid grid-cols-4 gap-3">
+                <MetricCard label="Total headcount" value={totalHC} sub={`${activeCount} active`}/>
+                <MetricCard label="Monthly HC cost" value={fmtMYR(totalCost)} sub="total payroll" valueClass="text-red-600"/>
+                <MetricCard label="Active" value={activeCount} valueClass="text-emerald-700"/>
+                <MetricCard label="Over-allocated" value={overAlloc} sub={overAlloc > 0 ? 'action needed' : 'all within 100%'}
+                  valueClass={overAlloc > 0 ? 'text-red-600' : 'text-emerald-700'}/>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
       )}
 
@@ -173,98 +185,102 @@ export default function ResourcesPage() {
           "Current Total %" reflects this month's Actual section — the current saved draft if one exists, otherwise what's already been submitted. Being over 100% is allowed and just gets flagged here; it no longer blocks saving or submitting.
         </p>
         {isLoading ? <div className="flex justify-center py-16"><Spinner size={28}/></div> : (
-          <Table>
-            <thead>
-              <tr>
-                <Th className="w-40">Name</Th><Th>Position</Th><Th>Role</Th><Th>Cost/mo</Th>
-                <Th>Current Total %</Th><Th>Projects</Th><Th>Status</Th>
-                <Th className="w-20">{""}</Th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-3 px-5 py-2.5 bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              <span>Name</span><span>Position</span><span>Role</span><span>Cost/mo</span><span>Current Total %</span>
+            </div>
+            <Accordion type="multiple" className="divide-y divide-gray-100">
               {resources?.map(r => {
                 const over = r.is_over_allocated
                 return (
-                  <tr key={r.id} className="hover:bg-gray-50/60">
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-semibold text-gray-500 flex-shrink-0">
-                          {r.name.split(' ').map(n => n[0]).join('').slice(0,2)}
+                  <AccordionItem key={r.id} value={String(r.id)} className="border-b-0 px-5">
+                    <AccordionTrigger className="py-3 hover:no-underline">
+                      <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-3 w-full items-center pr-3 text-left">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-semibold text-gray-500 flex-shrink-0">
+                            {r.name.split(' ').map(n => n[0]).join('').slice(0,2)}
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium">{r.name}</p>
+                            <p className="text-[10px] text-gray-400">{r.full_name || r.employee_code || '—'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium">{r.name}</p>
-                          <p className="text-[10px] text-gray-400">{r.full_name || r.employee_code || '—'}</p>
-                        </div>
-                      </div>
-                    </Td>
-                    <Td>
-                      <span className="text-xs text-gray-500">{r.resource_type}</span>
-                      {r.resource_type === 'Management' && (
-                        <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 font-semibold">✦</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${ROLE_BADGE[r.access_role] || 'bg-gray-100 text-gray-600'}`}>
-                        {r.access_role || 'Team Member'}
-                      </span>
-                    </Td>
-                    <Td className="font-mono text-xs">{fmtMYR(r.monthly_cost)}</Td>
-                    <Td>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded-full ${over ? 'bg-red-100 text-red-700' : r.total_allocation_pct < 100 ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {r.total_allocation_pct}%
+                        <span>
+                          <span className="text-xs text-gray-500">{r.resource_type}</span>
+                          {r.resource_type === 'Management' && (
+                            <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600 font-semibold">✦</span>
+                          )}
                         </span>
+                        <span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${ROLE_BADGE[r.access_role] || 'bg-gray-100 text-gray-600'}`}>
+                            {r.access_role || 'Team Member'}
+                          </span>
+                        </span>
+                        <span className="font-mono text-xs">{fmtMYR(r.monthly_cost)}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded-full ${over ? 'bg-red-100 text-red-700' : r.total_allocation_pct < 100 ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {r.total_allocation_pct}%
+                          </span>
+                          {over && <span title="Over-allocated">⚠️</span>}
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-3">
                         {over && (
-                          <span className="text-[10px] text-red-600 font-medium flex items-center gap-0.5"
-                            title="This resource's accumulated allocation across all their projects (this month's Actual — draft if not yet submitted, submitted if it has been) exceeds 100%. This is now allowed, but worth reviewing.">
-                            ⚠️ Over-allocated
-                          </span>
+                          <p className="text-[11px] text-red-600 font-medium flex items-center gap-1">
+                            ⚠️ Over-allocated — this resource's accumulated allocation across all their projects
+                            (this month's Actual — draft if not yet submitted, submitted if it has been) exceeds 100%.
+                            This is allowed, but worth reviewing.
+                          </p>
                         )}
-                      </div>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-1">
-                        {r.allocations.map(a => a.project_name && (
-                          <span key={a.id} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-50 border border-gray-100">
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: projColor(a.project_name ?? '') }}/>
-                            {a.project_name} <span className="text-gray-400">{a.allocation_pct}%</span>
-                          </span>
-                        ))}
-                      </div>
-                    </Td>
-                    <Td>
-                      {/* Editable status dropdown — Active / No Project / Resigned */}
-                      {canEdit('resources.table') ? (
-                        <select
-                          value={r.status}
-                          onChange={e => statusMut.mutate({ id: r.id, status: e.target.value })}
-                          className={`text-xs font-medium px-2 py-1 rounded-full border-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-300 ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      ) : (
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {r.status}
-                        </span>
-                      )}
-                    </Td>
-                    <Td>
-                      {canEdit('resources.table') && (
-                        <div className="flex gap-1">
-                          <button onClick={() => setModalResource(r)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Edit">
-                            <Edit2 size={11} className="text-blue-500"/>
-                          </button>
-                          <button onClick={() => { if (confirm(`Remove ${r.name}?`)) deleteMut.mutate(r.id) }}
-                            className="p-1.5 hover:bg-red-50 rounded-lg" title="Delete">
-                            <Trash2 size={11} className="text-red-400"/>
-                          </button>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1.5">Projects</p>
+                          <div className="flex flex-wrap gap-1">
+                            {r.allocations.length === 0 && <span className="text-xs text-gray-300">No current allocations</span>}
+                            {r.allocations.map(a => a.project_name && (
+                              <span key={a.id} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-gray-200">
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ background: projColor(a.project_name ?? '') }}/>
+                                {a.project_name} <span className="text-gray-400">{a.allocation_pct}%</span>
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      )}
-                    </Td>
-                  </tr>
+                        <div className="flex items-center justify-between pt-1">
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1.5">Status</p>
+                            {canEdit('resources.table') ? (
+                              <select
+                                value={r.status}
+                                onChange={e => statusMut.mutate({ id: r.id, status: e.target.value })}
+                                className={`text-xs font-medium px-2 py-1 rounded-full border-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-300 ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            ) : (
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_STYLES[r.status] || 'bg-gray-100 text-gray-600'}`}>
+                                {r.status}
+                              </span>
+                            )}
+                          </div>
+                          {canEdit('resources.table') && (
+                            <div className="flex gap-1">
+                              <button onClick={() => setModalResource(r)} className="p-1.5 hover:bg-gray-200/60 rounded-lg" title="Edit">
+                                <Edit2 size={12} className="text-blue-500"/>
+                              </button>
+                              <button onClick={() => { if (confirm(`Remove ${r.name}?`)) deleteMut.mutate(r.id) }}
+                                className="p-1.5 hover:bg-red-100 rounded-lg" title="Delete">
+                                <Trash2 size={12} className="text-red-400"/>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 )
               })}
-            </tbody>
-          </Table>
+            </Accordion>
+          </div>
           )}
         </>
         )}
