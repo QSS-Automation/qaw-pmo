@@ -1724,28 +1724,35 @@ function DrilldownView({ projects, isCompleted, selectedId, onSelect }: {
 
           {/* KPI header cards */}
           {budgetRow && canView('drilldown.summary') && (
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-white border border-gray-100 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Contract Value</p>
-                <p className="text-lg font-bold text-gray-900">{fmtMYR(selected.contract_value_myr)}</p>
-              </div>
-              <div className="bg-white border border-gray-100 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cost to Date</p>
-                <p className="text-lg font-bold text-amber-600">{fmtMYR(budgetRow.budget_utilized)}</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">{((budgetRow.util_pct||0)*100).toFixed(0)}% of budget</p>
-              </div>
-              <div className="bg-white border border-gray-100 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Progress</p>
-                <p className="text-lg font-bold text-gray-900">{(budgetRow?.actual_progress||0).toFixed(0)}%</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">vs {(budgetRow?.planned_progress||0).toFixed(0)}% planned</p>
-              </div>
-              <div className="bg-white border border-gray-100 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">RAG Status</p>
-                <p className={`text-lg font-bold ${status?.label==='Delayed'?'text-red-600':status?.label==='At risk'?'text-amber-600':'text-emerald-600'}`}>
-                  {status?.label}
-                </p>
-              </div>
-            </div>
+            <Accordion type="multiple" defaultValue={['kpis']} className="bg-white border border-gray-100 rounded-xl px-4">
+              <AccordionItem value="kpis" className="border-b-0">
+                <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">Project summary</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Contract Value</p>
+                      <p className="text-lg font-bold text-gray-900">{fmtMYR(selected.contract_value_myr)}</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Cost to Date</p>
+                      <p className="text-lg font-bold text-amber-600">{fmtMYR(budgetRow.budget_utilized)}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{((budgetRow.util_pct||0)*100).toFixed(0)}% of budget</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Progress</p>
+                      <p className="text-lg font-bold text-gray-900">{(budgetRow?.actual_progress||0).toFixed(0)}%</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">vs {(budgetRow?.planned_progress||0).toFixed(0)}% planned</p>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">RAG Status</p>
+                      <p className={`text-lg font-bold ${status?.label==='Delayed'?'text-red-600':status?.label==='At risk'?'text-amber-600':'text-emerald-600'}`}>
+                        {status?.label}
+                      </p>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
 
           {/* Plan & Actual / Schedule toggle — Plan & Actual is hidden entirely
