@@ -11,6 +11,7 @@ import {
   getPendingDateChanges, approveDateChange, rejectDateChange,
 } from '../api'
 import { Input, Spinner } from './ui'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './ui/accordion'
 import { fmtDate, fmtMYR } from '../utils'
 
 function fmtPct(n: number) { return `${(n ?? 0).toFixed(0)}%` }
@@ -675,73 +676,93 @@ function MilestonesPanel({ projectId, canEdit }: { projectId: number; canEdit: b
       </p>
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100 text-[10px] text-gray-400 uppercase tracking-wide">
-              <th className="text-left py-2 px-3">Label</th>
-              <th className="text-right py-2 px-2 w-20">%</th>
-              <th className="text-right py-2 px-2 w-28">Amount (MYR)</th>
-              <th className="text-left py-2 px-2 w-28">Due date</th>
-              <th className="text-left py-2 px-2 w-28">Invoice No</th>
-              <th className="text-left py-2 px-2 w-28">Invoice Date</th>
-              <th className="text-center py-2 px-2 w-20">Completed</th>
-              {canEdit && <th className="w-10"/>}
-            </tr>
-          </thead>
-          <tbody>
+        <div className="grid grid-cols-[1.5fr_auto_auto_auto_auto] gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[10px] text-gray-400 uppercase tracking-wide">
+          <span>Label</span><span className="text-right w-14">%</span><span className="text-right w-24">Amount</span>
+          <span className="w-24">Due date</span><span className="w-16 text-center">Done</span>
+        </div>
+        {milestones.length === 0 ? (
+          <p className="text-center py-6 text-xs text-gray-400">No milestones yet</p>
+        ) : (
+          <Accordion type="multiple" className="divide-y divide-gray-50">
             {milestones.map((m: any) => (
-              <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 group">
-                {editingId === m.id ? (
-                  <>
-                    <td className="px-2 py-1.5"><Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))}/></td>
-                    <td className="px-2 py-1.5"><Input type="number" value={form.percentage} onChange={e => setForm(f => ({ ...f, percentage: +e.target.value }))}/></td>
-                    <td className="px-2 py-1.5"><Input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: +e.target.value }))}/></td>
-                    <td className="px-2 py-1.5"><Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}/></td>
-                    <td className="px-2 py-1.5"><Input value={form.invoice_number} placeholder="Invoice #" onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))}/></td>
-                    <td className="px-2 py-1.5"><Input type="date" value={form.invoice_date} onChange={e => setForm(f => ({ ...f, invoice_date: e.target.value }))}/></td>
-                    <td className="text-center px-2 py-1.5">
-                      <button onClick={() => { updateMut.mutate({ id: m.id, body: form }); setEditingId(null) }}
-                        className="text-emerald-600 hover:text-emerald-700 text-[11px] font-semibold">Save</button>
-                      {' · '}
-                      <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 text-[11px]">Cancel</button>
-                    </td>
-                    {canEdit && <td/>}
-                  </>
-                ) : (
-                  <>
-                    <td className="px-3 py-2 text-gray-700">{m.label}</td>
-                    <td className="text-right px-2 py-2 font-mono text-gray-600">{m.percentage}%</td>
-                    <td className="text-right px-2 py-2 font-mono text-gray-600">{fmtMYR(m.amount || 0)}</td>
-                    <td className="px-2 py-2 text-gray-500">{fmtDate(m.due_date)}</td>
-                    <td className="px-2 py-2 text-gray-500">{m.invoice_number || '—'}</td>
-                    <td className="px-2 py-2 text-gray-500">{m.invoice_date ? fmtDate(m.invoice_date) : '—'}</td>
-                    <td className="text-center px-2 py-2">
-                      <button
-                        disabled={!canEdit}
-                        onClick={() => updateMut.mutate({ id: m.id, body: { is_completed: !m.is_completed } })}
-                        className={`w-5 h-5 rounded-full inline-flex items-center justify-center ${m.is_completed ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-transparent'} ${canEdit ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>
-                        <Check size={11}/>
-                      </button>
-                    </td>
-                    {canEdit && (
-                      <td className="px-2 py-2">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                          <button onClick={() => { setEditingId(m.id); setForm({ label: m.label, percentage: m.percentage, amount: m.amount, due_date: m.due_date || '', invoice_number: m.invoice_number || '', invoice_date: m.invoice_date || '' }) }}
-                            className="text-blue-400 hover:text-blue-600"><Pencil size={11}/></button>
-                          <button onClick={() => { if (confirm('Delete this milestone?')) deleteMut.mutate(m.id) }}
-                            className="text-red-400 hover:text-red-600"><Trash2 size={11}/></button>
+              <AccordionItem key={m.id} value={String(m.id)} className="border-b-0 px-4">
+                <AccordionTrigger className="py-2 text-xs hover:no-underline">
+                  <div className="grid grid-cols-[1.5fr_auto_auto_auto_auto] gap-3 w-full items-center pr-2 text-left">
+                    <span className="text-gray-700">{m.label}</span>
+                    <span className="text-right w-14 font-mono text-gray-600">{m.percentage}%</span>
+                    <span className="text-right w-24 font-mono text-gray-600">{fmtMYR(m.amount || 0)}</span>
+                    <span className="w-24 text-gray-500">{fmtDate(m.due_date)}</span>
+                    <span className="w-16 flex justify-center">
+                      <span className={`w-5 h-5 rounded-full inline-flex items-center justify-center ${m.is_completed ? 'bg-emerald-500 text-white' : 'bg-gray-100'}`}>
+                        {m.is_completed && <Check size={11}/>}
+                      </span>
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  {editingId === m.id ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input placeholder="Label" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} className="col-span-2"/>
+                        <div>
+                          <label className="text-[11px] text-gray-500 block mb-1">Percentage</label>
+                          <Input type="number" value={form.percentage} onChange={e => setForm(f => ({ ...f, percentage: +e.target.value }))}/>
                         </div>
-                      </td>
-                    )}
-                  </>
-                )}
-              </tr>
+                        <div>
+                          <label className="text-[11px] text-gray-500 block mb-1">Amount (MYR)</label>
+                          <Input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: +e.target.value }))}/>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-gray-500 block mb-1">Due date</label>
+                          <Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}/>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-gray-500 block mb-1">Invoice No</label>
+                          <Input value={form.invoice_number} placeholder="Invoice #" onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))}/>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-[11px] text-gray-500 block mb-1">Invoice date</label>
+                          <Input type="date" value={form.invoice_date} onChange={e => setForm(f => ({ ...f, invoice_date: e.target.value }))}/>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-white">Cancel</button>
+                        <button onClick={() => { updateMut.mutate({ id: m.id, body: form }); setEditingId(null) }}
+                          className="text-xs px-4 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800">Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Invoice No</p>
+                          <p className="text-gray-600">{m.invoice_number || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-0.5">Invoice date</p>
+                          <p className="text-gray-600">{m.invoice_date ? fmtDate(m.invoice_date) : '—'}</p>
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => updateMut.mutate({ id: m.id, body: { is_completed: !m.is_completed } })}
+                            className="text-xs text-gray-500 hover:text-emerald-600">
+                            {m.is_completed ? 'Mark incomplete' : 'Mark complete'}
+                          </button>
+                          <button onClick={() => { setEditingId(m.id); setForm({ label: m.label, percentage: m.percentage, amount: m.amount, due_date: m.due_date || '', invoice_number: m.invoice_number || '', invoice_date: m.invoice_date || '' }) }}
+                            className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700"><Pencil size={11}/> Edit</button>
+                          <button onClick={() => { if (confirm('Delete this milestone?')) deleteMut.mutate(m.id) }}
+                            className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600"><Trash2 size={11}/> Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
             ))}
-            {milestones.length === 0 && (
-              <tr><td colSpan={canEdit ? 8 : 7} className="text-center py-6 text-gray-400">No milestones yet</td></tr>
-            )}
-          </tbody>
-        </table>
+          </Accordion>
+        )}
       </div>
 
       {canEdit && showAddForm && (
