@@ -11,6 +11,7 @@ import {
 import { ProjectGanttSection } from '../components/GanttChart'
 import { PageHeader } from '../components/layout/Layout'
 import { Input, Spinner, Table, Th, Td, ProgressBar } from '../components/ui'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion'
 import { fmtMYR, fmtPct, fmtDate, projColor } from '../utils'
 
 import type { Project } from '../types'
@@ -1437,29 +1438,42 @@ function PortfolioKpiStrip({ summary }: { summary: any }) {
     : 0
 
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
-      <div className="bg-white border border-gray-100 rounded-xl p-4">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Contract Value</p>
-        <p className="text-xl font-bold text-gray-900">{fmtMYR(summary?.total_portfolio_myr || 0)}</p>
-      </div>
-      <div className="bg-white border border-gray-100 rounded-xl p-4">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Cost to Date</p>
-        <p className="text-xl font-bold text-amber-600">{fmtMYR(summary?.total_utilized || 0)}</p>
-        <p className="text-[11px] text-gray-400 mt-0.5">{costOfPortfolioPct.toFixed(0)}% of portfolio</p>
-      </div>
-      <div className="bg-white border border-gray-100 rounded-xl p-4">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">At Risk</p>
-        <p className="text-xl font-bold text-amber-600">{atRiskCount}</p>
-      </div>
-      <div className="bg-white border border-gray-100 rounded-xl p-4">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Delayed</p>
-        <p className="text-xl font-bold text-red-600">{delayedCount}</p>
-      </div>
-    </div>
+    <Accordion type="multiple" defaultValue={['kpis']} className="bg-white border border-gray-100 rounded-xl px-4 mb-6">
+      <AccordionItem value="kpis" className="border-b-0">
+        <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">Portfolio summary</AccordionTrigger>
+        <AccordionContent>
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Contract Value</p>
+              <p className="text-xl font-bold text-gray-900">{fmtMYR(summary?.total_portfolio_myr || 0)}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Cost to Date</p>
+              <p className="text-xl font-bold text-amber-600">{fmtMYR(summary?.total_utilized || 0)}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{costOfPortfolioPct.toFixed(0)}% of portfolio</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">At Risk</p>
+              <p className="text-xl font-bold text-amber-600">{atRiskCount}</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Delayed</p>
+              <p className="text-xl font-bold text-red-600">{delayedCount}</p>
+            </div>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   )
 }
 
 // ── Portfolio project card (name/PM/duration + dual Cost/Progress bars) ───────
+// Each project is now an accordion item: the trigger carries what you'd scan
+// a whole portfolio by (name, RAG, value) plus the Complete/Reactivate action,
+// which stays reachable without expanding. Expanding reveals the cost/progress
+// bars — previously always-visible — with an explicit "View details" button
+// to actually navigate into the full drill-down, replacing the old
+// whole-card-is-a-navigation-link behavior.
 function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
   project: Project;
   budgetRow: any | null;
@@ -1494,71 +1508,76 @@ function PortfolioCard({ project, budgetRow, isCompleted, onView }: {
   const behindBy  = planPct - actualPct
 
   return (
-    <div onClick={onView}
-      className="bg-white border border-gray-100 rounded-xl p-4 cursor-pointer hover:border-gray-200 hover:shadow-sm transition-all">
-      {/* Header row */}
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <p className="font-semibold text-sm text-gray-900">{project.name}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            {(project as any).project_code || '—'} · Account Manager: {project.account_manager || '—'}
-            {duration !== null && ` · ${duration} months`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1 ${status.badgeClass}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`}/>
-            {status.label}
-          </span>
-          <span className="font-bold text-sm text-gray-900">{fmtMYR(project.contract_value_myr)}</span>
-          {!isCompleted && isManagement && (wbsProgress?.actual_progress ?? 0) >= 100 && (
-            <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" to Completed?')) completeMut.mutate() }}
-              className="flex-shrink-0 text-xs px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              ✓ Complete
-            </button>
-          )}
-          {isCompleted && isManagement && (
-            <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" back to In Progress?')) reactivateMut.mutate() }}
-              className="flex-shrink-0 text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-              ↺ Reactivate
-            </button>
-          )}
-        </div>
-      </div>
-
-      {budgetRow && (
-        <>
-          {/* Cost / Progress dual bars */}
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-[11px] text-gray-400">Cost</span>
-                <span className="text-[11px] font-medium text-gray-600">{fmtMYR(utilized)} ({utilPct.toFixed(0)}%)</span>
-              </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${status.barClass}`} style={{ width: `${Math.min(100, utilPct)}%` }}/>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-[11px] text-gray-400">Progress</span>
-                <span className="text-[11px] font-medium text-gray-600">{actualPct.toFixed(0)}% (plan: {planPct.toFixed(0)}%)</span>
-              </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${status.barClass}`} style={{ width: `${Math.min(100, actualPct)}%` }}/>
-              </div>
-            </div>
-          </div>
-
-          {/* Behind-plan warning */}
-          {behindBy > 0.5 && (
-            <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
-              <AlertCircle size={11}/> {behindBy.toFixed(0)}% behind plan
+    <AccordionItem value={String(project.id)} className="border border-gray-100 rounded-xl px-4 data-[state=open]:border-gray-200 data-[state=open]:shadow-sm">
+      <AccordionTrigger className="py-3 hover:no-underline">
+        <div className="flex items-start justify-between w-full pr-2 text-left">
+          <div>
+            <p className="font-semibold text-sm text-gray-900">{project.name}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {(project as any).project_code || '—'} · Account Manager: {project.account_manager || '—'}
+              {duration !== null && ` · ${duration} months`}
             </p>
-          )}
-        </>
-      )}
-    </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1 ${status.badgeClass}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`}/>
+              {status.label}
+            </span>
+            <span className="font-bold text-sm text-gray-900">{fmtMYR(project.contract_value_myr)}</span>
+            {!isCompleted && isManagement && (wbsProgress?.actual_progress ?? 0) >= 100 && (
+              <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" to Completed?')) completeMut.mutate() }}
+                className="flex-shrink-0 text-xs px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                ✓ Complete
+              </button>
+            )}
+            {isCompleted && isManagement && (
+              <button onClick={e => { e.stopPropagation(); if (confirm('Move "' + project.name + '" back to In Progress?')) reactivateMut.mutate() }}
+                className="flex-shrink-0 text-xs px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                ↺ Reactivate
+              </button>
+            )}
+          </div>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent>
+        {budgetRow && (
+          <>
+            {/* Cost / Progress dual bars */}
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-[11px] text-gray-400">Cost</span>
+                  <span className="text-[11px] font-medium text-gray-600">{fmtMYR(utilized)} ({utilPct.toFixed(0)}%)</span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${status.barClass}`} style={{ width: `${Math.min(100, utilPct)}%` }}/>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-[11px] text-gray-400">Progress</span>
+                  <span className="text-[11px] font-medium text-gray-600">{actualPct.toFixed(0)}% (plan: {planPct.toFixed(0)}%)</span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${status.barClass}`} style={{ width: `${Math.min(100, actualPct)}%` }}/>
+                </div>
+              </div>
+            </div>
+
+            {/* Behind-plan warning */}
+            {behindBy > 0.5 && (
+              <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
+                <AlertCircle size={11}/> {behindBy.toFixed(0)}% behind plan
+              </p>
+            )}
+          </>
+        )}
+        <button onClick={onView}
+          className="mt-3 w-full text-xs font-medium text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+          View details →
+        </button>
+      </AccordionContent>
+    </AccordionItem>
   )
 }
 
@@ -1593,7 +1612,7 @@ function PortfolioView({ projects, isCompleted, onView }: {
         <p className="text-sm font-semibold text-gray-800 mb-3">
           {isCompleted ? 'All completed projects' : 'All active projects'}
         </p>
-        <div className="space-y-3">
+        <Accordion type="multiple" className="space-y-2">
           {projects.map(p => (
             <PortfolioCard
               key={p.id}
@@ -1603,7 +1622,7 @@ function PortfolioView({ projects, isCompleted, onView }: {
               onView={() => onView(p)}
             />
           ))}
-        </div>
+        </Accordion>
       </div>
       )}
     </div>
