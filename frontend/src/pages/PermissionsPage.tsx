@@ -7,7 +7,8 @@ import {
   createInvitation, getInvitations, revokeInvitation, resendInvitation, getSettings, updateSettings,
 } from '../api'
 import { PageHeader } from '../components/layout/Layout'
-import { Spinner, Table, Th, Td } from '../components/ui'
+import { Spinner } from '../components/ui'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion'
 
 const ROLE_BADGE: Record<string, string> = {
   'Admin':            'bg-purple-100 text-purple-700',
@@ -26,6 +27,9 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 }
 
 // ── Feature permission matrix ─────────────────────────────────────────────────
+// Each section is its own accordion item. "Select all" moved into the
+// expanded content — it's a checkbox, and a checkbox can't legally live
+// inside an accordion trigger's own <button> without breaking valid HTML.
 function FeatureMatrix() {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['admin-permissions'], queryFn: getPermissions })
@@ -130,55 +134,70 @@ function FeatureMatrix() {
           This is the first layer of access — a global baseline per role. Whether someone is staffed as Project Manager on a specific project is a separate, second layer underneath this one and isn't changed here.
         </p>
 
-        {data.sections.map((section: any) => {
-          const allOn = section.features.every((f: any) => {
-            const cell = f.roles[role] || { can_view: false, can_edit: false }
-            return cell.can_view && cell.can_edit
-          })
-          return (
-            <div key={section.section} className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{section.section}</p>
-                <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                  <input type="checkbox" checked={allOn}
-                    onChange={() => setAllInSection(section.features, role, !allOn)}
-                    className="w-3.5 h-3.5 rounded border-gray-300 text-gray-900 focus:ring-gray-500"/>
-                  Select all
-                </label>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {section.features.map((feature: any) => {
-                  const cell = feature.roles[role] || { can_view: false, can_edit: false }
-                  return (
-                    <div key={feature.key} className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-xs font-medium text-gray-700">{feature.label}</span>
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                          <input type="checkbox" checked={cell.can_view}
-                            onChange={() => toggle(feature.key, role, cell, 'can_view')}
-                            className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"/>
-                          View
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                          <input type="checkbox" checked={cell.can_edit}
-                            onChange={() => toggle(feature.key, role, cell, 'can_edit')}
-                            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
-                          Edit
-                        </label>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
+        <Accordion type="multiple" defaultValue={data.sections.map((s: any) => s.section)} className="space-y-3">
+          {data.sections.map((section: any) => {
+            const allOn = section.features.every((f: any) => {
+              const cell = f.roles[role] || { can_view: false, can_edit: false }
+              return cell.can_view && cell.can_edit
+            })
+            const onCount = section.features.reduce((n: number, f: any) => {
+              const cell = f.roles[role] || { can_view: false, can_edit: false }
+              return n + (cell.can_view ? 1 : 0) + (cell.can_edit ? 1 : 0)
+            }, 0)
+            return (
+              <AccordionItem key={section.section} value={section.section}
+                className="bg-white border border-gray-100 rounded-xl overflow-hidden border-b border-gray-100">
+                <AccordionTrigger className="bg-gray-50 px-4 py-2.5 hover:no-underline hover:bg-gray-100/60 [&>svg]:ml-3">
+                  <span className="flex items-center justify-between flex-1 text-left">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{section.section}</span>
+                    <span className="text-[11px] text-gray-400 mr-2">{onCount} on</span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer px-4 py-2 border-b border-gray-50 bg-gray-50/40">
+                    <input type="checkbox" checked={allOn}
+                      onChange={() => setAllInSection(section.features, role, !allOn)}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-gray-900 focus:ring-gray-500"/>
+                    Select all
+                  </label>
+                  <div className="divide-y divide-gray-50">
+                    {section.features.map((feature: any) => {
+                      const cell = feature.roles[role] || { can_view: false, can_edit: false }
+                      return (
+                        <div key={feature.key} className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-xs font-medium text-gray-700">{feature.label}</span>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                              <input type="checkbox" checked={cell.can_view}
+                                onChange={() => toggle(feature.key, role, cell, 'can_view')}
+                                className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"/>
+                              View
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                              <input type="checkbox" checked={cell.can_edit}
+                                onChange={() => toggle(feature.key, role, cell, 'can_edit')}
+                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>
+                              Edit
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )
+          })}
+        </Accordion>
       </div>
     </div>
   )
 }
 
 // ── Role assignment ───────────────────────────────────────────────────────────
+// Each person is an accordion row — name/type in the trigger (safe, read-only),
+// the actual role selector (an interactive <select>) moved into the content,
+// since an interactive control can't live inside the trigger's own <button>.
 const ACCESS_ROLES = ['Admin', 'Management', 'Project Manager', 'Account Manager', 'Team Member']
 
 function RoleAssignment() {
@@ -207,26 +226,34 @@ function RoleAssignment() {
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
         className="w-full max-w-xs border border-gray-200 rounded-lg px-3 py-2 text-xs"/>
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-        <Table>
-          <thead>
-            <tr><Th>Name</Th><Th>Type</Th><Th>Access Role</Th></tr>
-          </thead>
-          <tbody>
-            {filtered.map(r => (
-              <tr key={r.id} className="hover:bg-gray-50/60">
-                <Td className="font-medium">{r.name}</Td>
-                <Td className="text-gray-500">{r.resource_type}</Td>
-                <Td>
+        <div className="grid grid-cols-[1.5fr_1fr_1fr] gap-3 px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          <span>Name</span><span>Type</span><span>Access Role</span>
+        </div>
+        <Accordion type="multiple" className="divide-y divide-gray-50">
+          {filtered.map(r => (
+            <AccordionItem key={r.id} value={String(r.id)} className="border-b-0 px-5">
+              <AccordionTrigger className="py-2.5 text-xs hover:no-underline">
+                <div className="grid grid-cols-[1.5fr_1fr_1fr] gap-3 w-full items-center pr-2 text-left">
+                  <span className="font-medium">{r.name}</span>
+                  <span className="text-gray-500">{r.resource_type}</span>
+                  <span className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-semibold ${ROLE_BADGE[r.access_role] || 'bg-gray-100 text-gray-600'}`}>
+                    {r.access_role}
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <label className="flex items-center gap-2 text-xs text-gray-500">
+                  Change access role:
                   <select value={r.access_role}
                     onChange={e => mut.mutate({ id: r.id, role: e.target.value })}
                     className={`border-0 rounded-lg px-2 py-1 text-xs font-semibold ${ROLE_BADGE[r.access_role] || 'bg-gray-100 text-gray-600'}`}>
                     {ACCESS_ROLES.map(role => <option key={role} value={role}>{role}</option>)}
                   </select>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+                </label>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
     </div>
   )
@@ -338,40 +365,45 @@ function InvitationsPanel() {
         ) : (invitations as any[]).length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">No invitations yet.</p>
         ) : (
-          <Table>
-            <thead><tr><Th>Name</Th><Th>Email</Th><Th>Role</Th><Th>Status</Th><Th className="w-16">{''}</Th></tr></thead>
-            <tbody>
+          <>
+            <div className="grid grid-cols-[1.2fr_1.5fr_1fr_1fr] gap-3 px-5 py-2 border-b border-gray-100 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+              <span>Name</span><span>Email</span><span>Role</span><span>Status</span>
+            </div>
+            <Accordion type="multiple" className="divide-y divide-gray-50">
               {(invitations as any[]).map(inv => (
-                <tr key={inv.id} className="hover:bg-gray-50/60">
-                  <Td className="font-medium">{inv.name}</Td>
-                  <Td className="text-gray-500">{inv.email}</Td>
-                  <Td className="text-gray-500">{inv.access_role}</Td>
-                  <Td>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${inv.invite_status === 'Accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {inv.invite_status}
-                    </span>
-                  </Td>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      {inv.invite_status === 'Pending' && (
-                        <>
-                          <button onClick={() => resendMut.mutate(inv.id)} title="Resend email" disabled={resendMut.isPending} className="text-gray-400 hover:text-blue-600 disabled:opacity-40">
-                            <RefreshCw size={13}/>
-                          </button>
-                          <button onClick={() => copyLink(inv.invite_token)} title="Copy link" className="text-gray-400 hover:text-gray-600">
-                            <Copy size={13}/>
-                          </button>
-                          <button onClick={() => revokeMut.mutate(inv.id)} title="Revoke" className="text-gray-400 hover:text-red-500">
-                            <Trash2 size={13}/>
-                          </button>
-                        </>
-                      )}
+                <AccordionItem key={inv.id} value={String(inv.id)} className="border-b-0 px-5" disabled={inv.invite_status !== 'Pending'}>
+                  <AccordionTrigger className={`py-2.5 text-xs hover:no-underline ${inv.invite_status !== 'Pending' ? '[&>svg]:opacity-0 cursor-default' : ''}`}>
+                    <div className="grid grid-cols-[1.2fr_1.5fr_1fr_1fr] gap-3 w-full items-center pr-2 text-left">
+                      <span className="font-medium">{inv.name}</span>
+                      <span className="text-gray-500">{inv.email}</span>
+                      <span className="text-gray-500">{inv.access_role}</span>
+                      <span className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-semibold ${inv.invite_status === 'Accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {inv.invite_status}
+                      </span>
                     </div>
-                  </Td>
-                </tr>
+                  </AccordionTrigger>
+                  {inv.invite_status === 'Pending' && (
+                    <AccordionContent>
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => resendMut.mutate(inv.id)} disabled={resendMut.isPending}
+                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 disabled:opacity-40">
+                          <RefreshCw size={13}/> Resend email
+                        </button>
+                        <button onClick={() => copyLink(inv.invite_token)}
+                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700">
+                          <Copy size={13}/> Copy link
+                        </button>
+                        <button onClick={() => revokeMut.mutate(inv.id)}
+                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-500">
+                          <Trash2 size={13}/> Revoke
+                        </button>
+                      </div>
+                    </AccordionContent>
+                  )}
+                </AccordionItem>
               ))}
-            </tbody>
-          </Table>
+            </Accordion>
+          </>
         )}
       </div>
     </div>
@@ -400,20 +432,28 @@ function GeneralSettings() {
   const unchanged = value === (data?.app_name || '')
 
   return (
-    <div className="max-w-md space-y-4">
-      <p className="text-[11px] text-gray-400">
-        This name appears in the sidebar, the browser tab, and the invitation welcome screen — changing it takes effect everywhere immediately, no restart needed.
-      </p>
-      <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
-        <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">App name</label>
-        <input value={value} onChange={e => setValue(e.target.value)}
-          placeholder="e.g. Acme Corp PM"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
-        <button onClick={() => mut.mutate()} disabled={mut.isPending || unchanged || !value.trim()}
-          className="px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-xl hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed">
-          {mut.isPending ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+    <div className="max-w-md">
+      <Accordion type="multiple" defaultValue={['general']} className="bg-white border border-gray-100 rounded-xl px-4">
+        <AccordionItem value="general" className="border-b-0">
+          <AccordionTrigger className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest hover:no-underline py-3">
+            App name
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <p className="text-[11px] text-gray-400 mb-3">
+              This name appears in the sidebar, the browser tab, and the invitation welcome screen — changing it takes effect everywhere immediately, no restart needed.
+            </p>
+            <div className="space-y-3">
+              <input value={value} onChange={e => setValue(e.target.value)}
+                placeholder="e.g. Acme Corp PM"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+              <button onClick={() => mut.mutate()} disabled={mut.isPending || unchanged || !value.trim()}
+                className="px-4 py-2 bg-gray-900 text-white text-xs font-medium rounded-xl hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed">
+                {mut.isPending ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   )
 }
